@@ -50,7 +50,7 @@ ts %>%
 # Unhash for testing! -------------------------------------------------------------------------
 grid = SD_raster; data = grid_data; vacc = vacc_mat;
 I_seed = 2; start_vacc = 0.2;  
-R_0 = 1.2; k = 0.2; 
+R_0 = 1.1; k = 0.2; 
 iota = 1; scale_iota = 1;
 # weekly number of incursions and scaling factor 
 sigma = get.prob(rate = 7/22.3, step = 1); # weekly rate to prob exp -> inf
@@ -63,8 +63,9 @@ p_revacc = 1;
 dispersalShape = 0.3484; dispersalScale = 41.28/100;
 
 ## No vacc scenario
-# vacc_mat[,2:ncol(vacc_mat)] <- ifelse(vacc_mat[,2:ncol(vacc_mat)] > 0, 0, 0)
-# start_vacc = 0
+vacc_mat[,2:ncol(vacc_mat)] <- ifelse(vacc_mat[,2:ncol(vacc_mat)] > 0, 0, 0)
+start_vacc = 0
+vacc <- vacc_mat
 
 # PRE SET-UP, should be done outside of function! --------------------------------------------------
 grid_ID <- grid ## set up ID grid
@@ -142,8 +143,12 @@ if(nrow(I_coords) > 0){
           
           ## This means will only go somewhere within a vill
           check <- extract(grid_ID, cbind(x_new, y_new))
-          within <- ifelse(check %in% cell_id, 1, 0)
+          if(check %in% cell_id){
+            within <- ifelse(N[row_id[which(cell_id == check)], 1] > 0, 1, 0)
+          }
           ## This code means only in populated places and doggies don't leave the district
+          ## or not restricting to populated places:
+          ## within <- ifelse(check %in% data$cell_id == TRUE, 1, 0)
         }
         
         E_coords_new <- data.frame(ID = counter, tstep = 1, 
@@ -161,11 +166,26 @@ if(nrow(I_coords) > 0){
 E_coords <- filter(E_coords, !is.na(ID))
 
 if(nrow(E_coords) > 0) {
-  ## probability that contact will be with a susceptible = St/Nt-1
-  E_coords$sus <- S[row_id[match(E_coords$cell_id, cell_id)], 1]/
-    N[row_id[match(E_coords$cell_id, cell_id)], 1]
-  E_coords$trans <- rbinom(nrow(E_coords), size = 1, prob = E_coords$sus)
+  ## probability that contact will be with a susceptible = St/Nt
+  E_coords$sus <- S[row_id[match(E_coords$cell_id, cell_id)], 1]
+  E_coords$N <- N[row_id[match(E_coords$cell_id, cell_id)], 1]
+  ids <-  unique(E_coords$cell_id)
+  for (i in 1:length(ids)) {
+    E_trans <- filter(E_coords, cell_id == ids[i])
+    done <- 0
+    max <- E_trans$sus[1]
+    for(j in 1:nrow(E_trans)){
+      if (done < max){
+        E_trans$trans[j] <- rbinom(1, size = 1, prob = ifelse(E_trans$N[j] == 0, 0, 
+                                                              E_trans$sus[j]/E_trans$N[j]))
+        E_coords$trans[match(E_trans$ID[j], E_coords$ID)] <- E_trans$trans[j]
+        done <- done + E_trans$trans[j]
+      }
+    }
+  }
   E_coords %>%
+    mutate(sus = sus/N) %>%
+    dplyr::select(-N) %>%
     drop_na(trans) %>%
     filter(trans == 1) -> E_coords
 } else {
@@ -185,8 +205,9 @@ unaccounted <- rep(0, ntimes)
 
 # 3. Simulate for rest of time steps -------------------------------------------------------------
 for (t in 2:ntimes) {
+  # t = 2
   print(paste(t, "/", tmax, "weeks"))
-  # t = 81
+  
   # 3a. Simulate vaccination ------------------------------------------------------------------------
   ## TO DO: ## speed up not using filter
   ## TO DO: ## make sure leftover vaccinated goes to adjacent vills
@@ -302,15 +323,20 @@ for (t in 2:ntimes) {
             
             ## This means will only go somewhere within a vill
             check <- extract(grid_ID, cbind(x_new, y_new))
-            within <- ifelse(check %in% data$cell_id == TRUE, 1, 0)
+            
+            if(check %in% cell_id){
+              within <- ifelse(N[row_id[which(cell_id == check)], t-1] > 0, 1, 0)
+            }
             ## This code means only in populated places and doggies don't leave the district
+            ## or not restricting to populated places:
+            ## within <- ifelse(check %in% data$cell_id == TRUE, 1, 0)
           }
           
           E_coords_new <- data.frame(ID = counter, tstep = t, 
                                      x_coord = x_new, y_coord = y_new,  
                                      progen_ID = I_coords_now$ID[i], path_ID = j, 
-                                     cell_id = check, sus = NA, trans = 0, 
-                                     infectious = NA, secondaries = NA)
+                                     cell_id = check, sus = NA, trans = NA, 
+                                     infectious = 0, secondaries = NA)
           last_coords <- c(x_new, y_new)
           E_coords_now <- rbind(E_coords_now, E_coords_new)
         }
@@ -334,11 +360,11 @@ for (t in 2:ntimes) {
       done <- 0
       max <- E_trans$sus[1]
       for(j in 1:nrow(E_trans)){
-        while(done < max){
-          E_trans$trans[j] <- rbinom(1, size = 1, prob = ifelse(E_trans$N[j] == 0, 0, 
-                                                                E_trans$sus/E_trans$N[j]))
-          E_coords_now$trans[E_coords_now$ID %in% E_trans$ID[j]] <- E_trans$trans[j]
-          done <- done + E_trans$trans[j]
+          if (done < max){
+            E_trans$trans[j] <- rbinom(1, size = 1, prob = ifelse(E_trans$N[j] == 0, 0, 
+                                                                E_trans$sus[j]/E_trans$N[j]))
+            E_coords_now$trans[match(E_trans$ID[j], E_coords_now$ID)] <- E_trans$trans[j]
+            done <- done + E_trans$trans[j]
         }
       }
     }
@@ -357,9 +383,7 @@ for (t in 2:ntimes) {
       group_by(cell_id) %>%
       summarize(count = n()) -> E_count
     E_new <- rep(0, nlocs)
-    E_new[row_id[match(E_coords_now$cell_id, cell_id)]] <- E_count$count ## add in newly exposed
-    E_new <- ifelse(E_new > S[, t], S[, t], E_new) ## cannot have more exposed than available sus!
-    ## Alternatively add to above where you get sus + n and do group_by cell_id (more realistic + keep track of trans)
+    E_new[row_id[match(E_count$cell_id, cell_id)]] <- E_count$count ## add in newly exposed
   } else {
     E_new <- rep(0, nlocs)
   }
