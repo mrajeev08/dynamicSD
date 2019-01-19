@@ -18,7 +18,7 @@ vacc_data <- read_csv(paste0("data/", list.files("data/", pattern = "Vaccination
 SD_shape <- readOGR("data/SD_shape/Serengeti_villages UTM_region.shp")
 census_data <- read.csv("data/SDcompiled.csv")
 pop_data <- read.csv("data/SerengetiPop.csv")
-
+rabies_ts <- read.csv("data/cases.csv")
 ## Get raster data
 r <- raster(SD_shape)
 res(r) <- 1000
@@ -50,7 +50,7 @@ ts %>%
 # Unhash for testing! -------------------------------------------------------------------------
 grid = SD_raster; data = grid_data; vacc = vacc_mat;
 I_seed = 2; start_vacc = 0.2;  
-R_0 = 1.1; k = 0.2; 
+R_0 = 1.1; k = 0.4; 
 iota = 1; scale_iota = 1;
 # weekly number of incursions and scaling factor 
 sigma = get.prob(rate = 7/22.3, step = 1); # weekly rate to prob exp -> inf
@@ -63,8 +63,8 @@ p_revacc = 1;
 dispersalShape = 0.3484; dispersalScale = 41.28/100;
 
 ## No vacc scenario
-vacc_mat[,2:ncol(vacc_mat)] <- ifelse(vacc_mat[,2:ncol(vacc_mat)] > 0, 0, 0)
-start_vacc = 0
+# vacc_mat[,2:ncol(vacc_mat)] <- ifelse(vacc_mat[,2:ncol(vacc_mat)] > 0, 0, 0)
+# start_vacc = 0
 vacc <- vacc_mat
 
 # PRE SET-UP, should be done outside of function! --------------------------------------------------
@@ -201,7 +201,7 @@ if (nrow(E_coords) > 0) {
 
 ## Finish subtracting everyone out
 S[, 1] <- S[, 1] - E[ ,1] ## subtract out newly exposed guys from S
-unaccounted <- rep(0, ntimes)
+unaccounted <- rep(0, ntimes) ## keeping track of any vacc individuals that went unaccounted for
 
 # 3. Simulate for rest of time steps -------------------------------------------------------------
 for (t in 2:ntimes) {
@@ -286,7 +286,7 @@ for (t in 2:ntimes) {
                                 cell_id = data$cell_id[I_locs], sus = NA,
                                 trans = NA, infectious = 1, 
                                 secondaries = NA)
-    I_coords_now <- rbind(I_coords_in, I_coords_out)
+    I_coords_now <- rbind(I_coords_in, I_coords_out) 
   } else{
     I_coords_now <- I_coords_in
   }
@@ -392,7 +392,8 @@ for (t in 2:ntimes) {
   E[, t] <- E[, t] + E_new ## - infectious from within district + newly exposed
   S[, t] <- S[, t] - E_new ## subtract out newly exposed guys in the week
   
-  E_coords <- rbind(E_coords, E_coords_now)
+  ## change this to avoid growing dataframes!
+  E_coords <- rbind(E_coords, E_coords_now) ## 
   
   I_coords <- rbind(I_coords, I_coords_now) ## to build trees!
 }
@@ -406,5 +407,6 @@ sum_times <- function(vector, steps, na.rm=TRUE) {    # 'matrix'
 
 mIobs <- apply(I_all[,1:(ncol(I_all)-3)], 1 , sum_times, steps = 4)
 plot(rowSums(mIobs, na.rm = TRUE), type = "l")
-plot(colSums(I_all, na.rm = TRUE), type = "l")
+lines(rabies_ts$cases, col = "red")
+plot(colSums(S)/colSums(N), col = "blue", type = "l")
 
