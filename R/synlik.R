@@ -78,7 +78,7 @@ check.ncores <- function (sim_secs = 60, niter = 20000, nsim = 500, nchains = 3,
   print(time_tot/60/60)
 }
 
-check.ncores(sim_secs = 30, niter = 2000, nsim = 1000, nchains = 3, target.hrs = 24*3)
+check.ncores(sim_secs = 15, niter = 2000, nsim = 500, nchains = 3, target.hrs = 24*6)
 
 20000*500*3*60 ## 30 million sims = 30 million minutes
 1.8e9/60 ## 30 million minutes
