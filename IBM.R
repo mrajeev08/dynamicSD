@@ -13,7 +13,7 @@ library(ISOweek)
 library(data.table)
 
 ## Source in functions
-source("functions.R")
+source("R/functions.R")
 source("R/utils.R")
 
 ## Data
@@ -430,7 +430,6 @@ sim.IBM <- function(grid = SD_raster, data = grid_data, vacc = vacc_mat,
     E_coords <- rbindlist(list(E_coords, E_coords_now), fill = TRUE, use.names = TRUE)
     I_coords <- rbindlist(list(I_coords, I_coords_now), fill = TRUE, use.names = TRUE) ## to build trees!
   }
-  
   if (return_coords == TRUE) {
     return(list(N, S, E, I_all, I_dist, I_coords, vill_vacc))
   }
@@ -441,8 +440,9 @@ sim.IBM <- function(grid = SD_raster, data = grid_data, vacc = vacc_mat,
 
 rabies_ts <- read.csv("data/cases.csv")
 
-check <- sim.IBM(R_0 = 1.2, k = 0.5, p_revacc = 0.4)
-
+system.time(
+  check <- sim.IBM(R_0 = 1.1, k = 0.5, p_revacc = 0.5)
+)
 sum_times <- function(vector, steps, na.rm=TRUE) {    # 'matrix'
   nv <- length(vector)
   if (nv %% steps)
@@ -466,4 +466,4 @@ lines(rabies_ts$cases, col = "red")
 plot(colSums(S)/colSums(N), col = "blue", type = "l")
 plot(colSums(N), col = "blue", type = "l")
 
-
+mNobs <- N[, seq(1, tmax, by = 4)]
