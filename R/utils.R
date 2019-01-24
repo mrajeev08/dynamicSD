@@ -148,3 +148,75 @@ convert12_02 <- function(data){ # CONVERT VILLAGES FROM 2012 TO 2002! (data 2012
   # apparenly not, Kerukerege is a kitongoji in Maburi village
   data
 }
+
+# Simulating with multinomial probability (not summing to 1) ----------------------------------
+## Needs to be a matrix!
+sim.multinom <- function(sizes = c(10, 15, 20, 30), 
+                         probs = cbind(0.05, 0.01)) {
+  trans <- matrix(NA, nrow = length(sizes), ncol = ncol(probs) + 1)
+  
+  if (nrow(probs) == 1){
+    prob_vec <- c(probs[1, ], 1 - sum(probs[1, ]))
+    for (i in 1:length(sizes)){
+      if(!is.na(sizes[i])) {
+        trans[i, ] <- rmultinom (1, size = sizes[i], prob_vec)
+      }
+    }
+  }
+  
+  if(nrow(probs) > 1) {
+    for (i in 1:length(sizes)){
+      if(!is.na(sizes[i])) {
+        prob_vec <- c(probs[i, ], 1 - sum(probs[i, ]))
+        trans[i, ] <- rmultinom (1, size = sizes[i], prob_vec)
+      }
+    }
+  }
+  return(trans) 
+}
+
+
+# Growing data frames -----------------------------------------------------------------------
+## here elems is a named list!
+## only at super high # of rows does this become more efficient
+create.df <- function(elems){
+  dt <- as.data.table(elems)
+  setattr(dt, 'rowcount', max(lengths(elems)))
+}
+
+append.df <- function(dt, elems) {
+  n <- attr(dt, 'rowcount')
+  
+  if(is.null(n)) {
+    n <- nrow(dt)
+  }
+  
+  max_row <- n + max(lengths(elems))
+  
+  if(max_row > nrow(dt)) {
+    tmp <- elems[(nrow(dt)+1):(nrow(dt)*2)]
+    dt <- rbindlist(list(dt, tmp), fill = TRUE, use.names = TRUE)
+  }
+  
+  dt[(n+1):max_row, ] <- elems
+  
+  setattr(dt, 'rowcount', max_row)
+  
+  return(dt)
+}
+
+access.df <- function(dt) {
+  n <- attr(dt, 'rowcount')
+  return(as.data.table(dt[1:n, ]))
+}
+
+# Getting probability from rate ---------------------------------------------------------------
+get.prob <- function(rate, step) {
+  # ## example 1: turn annual waning rate of 0.33 to weekly prob
+  # get.prob(rate = 0.33, step = 52)
+  # ## example 2: turn annual birth rate of 0.45 to monthly prob
+  # get.prob(rate = 0.45, step = 12)
+  converted <- (1 + rate)^(1/step) - 1
+  return(1 - exp(-converted))
+}
+
