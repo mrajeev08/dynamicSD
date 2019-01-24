@@ -1,17 +1,7 @@
-
-# Getting probability from rate ---------------------------------------------------------------
-get.prob <- function(rate, step) {
-  # ## example 1: turn annual waning rate of 0.33 to weekly prob
-  # get.prob(rate = 0.33, step = 52)
-  # ## example 2: turn annual birth rate of 0.45 to monthly prob
-  # get.prob(rate = 0.45, step = 12)
-  converted <- (1 + rate)^(1/step) - 1
-  return(1 - exp(-converted))
-}
-
 # Aggregating village vaccination to campaigns -----------------------------------------------
 ## To do: need to add in part to check ones with no Vill 2002 names!
 ## and shout warning of how many doggies we're losing to this
+## and add adjacency correction for villages!
 get.campaigns.WM <- function(vacc = vacc_data, pop = pop_data, threshold, shape) {
   ## vacc = vacc_data; pop = pop_data; shape = SD_shape; threshold = 45;
   vacc <- filter(vacc, District == "Serengeti")
@@ -111,63 +101,9 @@ get.grid <- function(shapefile, resolution = 1000, pop = pop_data, census = cens
 }
 
 
-# Simulating with multinomial probability (not summing to 1) ----------------------------------
-## Needs to be a matrix!
-sim.multinom <- function(sizes = c(10, 15, 20, 30), 
-                         probs = cbind(0.05, 0.01)) {
-  trans <- matrix(NA, nrow = length(sizes), ncol = ncol(probs) + 1)
-  
-  if (nrow(probs) == 1){
-    prob_vec <- c(probs[1, ], 1 - sum(probs[1, ]))
-    for (i in 1:length(sizes)){
-      if(!is.na(sizes[i])) {
-        trans[i, ] <- rmultinom (1, size = sizes[i], prob_vec)
-      }
-    }
-  }
-  
-  if(nrow(probs) > 1) {
-    for (i in 1:length(sizes)){
-      if(!is.na(sizes[i])) {
-        prob_vec <- c(probs[i, ], 1 - sum(probs[i, ]))
-        trans[i, ] <- rmultinom (1, size = sizes[i], prob_vec)
-      }
-    }
-  }
-  return(trans) 
-}
+# Cleaning census -----------------------------------------------------------------------------
 
-# Growing data frames -----------------------------------------------------------------------
-## here elems is a named list!
-## only at super high # of rows does this become more efficient
-create.df <- function(elems){
-  dt <- as.data.table(elems)
-  setattr(dt, 'rowcount', max(lengths(elems)))
-}
 
-append.df <- function(dt, elems) {
-  n <- attr(dt, 'rowcount')
-  
-  if(is.null(n)) {
-    n <- nrow(dt)
-  }
-  
-  max_row <- n + max(lengths(elems))
-  
-  if(max_row > nrow(dt)) {
-    tmp <- elems[(nrow(dt)+1):(nrow(dt)*2)]
-    dt <- rbindlist(list(dt, tmp), fill = TRUE, use.names = TRUE)
-  }
-  
-  dt[(n+1):max_row, ] <- elems
-  
-  setattr(dt, 'rowcount', max_row)
+# Cleaning rabid  -----------------------------------------------------------------------------
 
-  return(dt)
-}
-
-access.df <- function(dt) {
-  n <- attr(dt, 'rowcount')
-  return(as.data.table(dt[1:n, ]))
-}
 
