@@ -1,10 +1,16 @@
 ## Getting adjacency graph for shapefile
+library(rgdal)
+library(spdep)
+library(igraph)
+SD_shape <- readOGR("~/Documents/Projects/dynamics_SD/data/SD_shape/Serengeti_villages UTM_region.shp")
 get.adjgraph.shape <- function(shapefile){
   adj_vill <- poly2nb(shapefile)
   adj_mat <- nb2mat(adj_vill, style="B", zero.policy = TRUE)
   adj_graph <- graph_from_adjacency_matrix(adj_mat, mode = "undirected", diag = FALSE)
   return(adj_graph)
 }
+adj_graph <- get.adjgraph.shape(SD_shape)
+saveRDS(adj_graph, "~/Documents/Projects/rabies_sfunk/data/vill_graph.rds")
 
 ## Getting adjacency graph for raster
 get.adjgraph.raster <- function(raster, cell_id = grid_data$cell_id, 
@@ -19,9 +25,9 @@ get.adjgraph.raster <- function(raster, cell_id = grid_data$cell_id,
 }
 
 ## apply this function to each column in cov mat (needs to be merged with all grid cells!)
-get.connmetric <- function(x, adj_graph = adj_graph_rast, threshold = 0.8){
-  V(adj_graph)$sus <- x
-  adj_graph <- delete.vertices(adj_graph, which(V(adj_graph)$sus <= threshold))
+get.connmetric <- function(x, adj_graph = adj_graph_rast, threshold = 0.2){
+  V(adj_graph)$cov <- x
+  adj_graph <- delete.vertices(adj_graph, which(V(adj_graph)$cov <= threshold))
   npatches <- components(adj_graph)$csize
   conn <- sum(npatches^2)
   return(conn)
@@ -34,12 +40,22 @@ library(spdep)
 library(Matrix)
 # metric of connected patches with susceptibility greater than 0.8 (or threshold)
 # or if cov_mat then, metric of connected patches with coverage greater than 0.8 (or threshold)
-adj_vill <- poly2nb(SD_shape)
+adj_vill <- poly2nb(SD_shape, row.names = SD_shape$VILLCODE)
 adj_mat <- nb2mat(adj_vill, style="B", zero.policy = TRUE)
-adj_graph <- graph_from_adjacency_matrix(adj_mat, mode = "undirected", diag = FALSE)
+adj_graph <- graph_from_adjacency_matrix(adj_mat, mode = "undirected", diag = FALSE, add.rownames = "villcodes")
 vill_vacc <- check[[7]]
-vill_vacc <- vill_vacc[order(match(rownames(vill_vacc), SD_shape$VILLCODE)), ]
-SD_shape$VILLCODE == as.factor(rownames(vill_vacc)) ## to check order is right
+
+vill_vacc <- vill_vacc[order(match(rownames(vill_vacc), V(adj_graph)$villcodes)), ]
+V(adj_graph)$villcodes == rownames(vill_vacc) ## to check order is right
+
+## For writing to seb's folder
+# vill_vacc[, 1] <- 0.2
+# vill_vacc <- vill_vacc[, 1:676]
+# vill_vacc <- vill_vacc[, seq(1, 676, by = 4)]
+# vill_vacc <- vill_vacc[, 1:157]
+# write.csv(vill_vacc, "~/Documents/Projects/rabies_sfunk/data/vill_vaccmat.csv", row.names = TRUE)
+
+
 quartz()
 plot(apply(vill_vacc, 2, get.connmetric, adj_graph = adj_graph, threshold = 0.2)/75^2, 
      type = "l", 
