@@ -13,7 +13,7 @@ library(ISOweek)
 library(data.table)
 
 ## Source in functions
-source("R/functions.R")
+source("R/data_functions.R")
 source("R/utils.R")
 
 ## Data
@@ -49,7 +49,7 @@ tmax <- (ylast - y1) * steps
 start_date <- "01-01-2002"
 
 ## Get vacc campaigns at vill level
-campaigns <- get.campaigns.WM(vacc = vacc_data, pop = pop_data, shape = SD_shape, threshold = 45)
+campaigns <- get.campaigns.WM(vacc = vacc_data, pop = pop_data, shape = SD_shape, threshold = 7)
 campaigns$week <- get.consec(campaigns$date_med, format_date = "%Y-%m-%d", start = "01-01-2002", 
                              format_start = "%d-%m-%Y", year1 = 2002, tstep = "week", get.info = FALSE)
 ts <- as.data.frame(1:tmax)
@@ -224,61 +224,67 @@ sim.IBM <- function(grid = SD_raster, data = grid_data, vacc = vacc_mat,
     # 3a. Simulate vaccination ---------------------------------------------------------------------
     ## TO DO: ## make sure leftover vaccinated goes to adjacent vills
     now.vill <- as.data.table(list(villcode = data$villcode, 
-                                   Sdogs = S[, t-1], Vdogs = V[, t-1], 
-                                   Ndogs = N[, t-1]))
+                                     Sdogs = S[, t-1], Vdogs = V[, t-1], 
+                                     Ndogs = N[, t-1]))
     now.vill <- now.vill[, .(Sdogs = sum(Sdogs, na.rm = TRUE), 
-                             Vdogs = sum(Vdogs, na.rm = TRUE),
-                             Ndogs = sum(Ndogs, na.rm = TRUE)), 
-                         by = villcode]
-    now.vill$vacc <- vacc[, t + 1][match(now.vill$villcode, vacc$villcode)]
-    now.vill$revacc <- rbinom(nrow(now.vill), size = now.vill$Vdogs, prob = p_revacc)
-    ## dogs currently vaccinated that were revaccinated
-    now.vill$vacc_new <- ifelse(now.vill$vacc - now.vill$revacc <= 0, now.vill$vacc, 
-                                ifelse((now.vill$vacc - now.vill$revacc) > now.vill$Sdogs, 
-                                       now.vill$Sdogs, 
-                                       now.vill$vacc - now.vill$revacc))
-    ## dogs newly vaccinated accounting for revacc(max)
-    ## if revacc is bigger than # vaccinated total, likely indicates an additive, smaller campaign
-    ## this is based on the way we grouped campaigns 
-    ## TO DO: check to see what not assuming this does to vacc cov
-    ## otherwise just maximum possible for that vill
-    
-    ## Keep track of village cov
+                               Vdogs = sum(Vdogs, na.rm = TRUE),
+                               Ndogs = sum(Ndogs, na.rm = TRUE)), 
+                           by = villcode]
     if (t == 2){
       rownames(vill_vacc) <- now.vill$villcode
     }
     
-    vill_vacc[, t] <- (now.vill$Vdogs + now.vill$vacc_new)/now.vill$Ndogs
+    if (sum(vacc_mat[, t + 1]) > 0) {
+      now.vill$vacc <- vacc[, t + 1][match(now.vill$villcode, vacc$villcode)]
+      now.vill$revacc <- rbinom(nrow(now.vill), size = now.vill$Vdogs, prob = p_revacc)
+      ## dogs currently vaccinated that were revaccinated
+      now.vill$vacc_new <- ifelse(now.vill$vacc - now.vill$revacc <= 0, now.vill$vacc, 
+                                  ifelse((now.vill$vacc - now.vill$revacc) > now.vill$Sdogs, 
+                                         now.vill$Sdogs, 
+                                         now.vill$vacc - now.vill$revacc))
+      ## dogs newly vaccinated accounting for revacc(max)
+      ## if revacc is bigger than # vaccinated total, likely indicates an additive, smaller campaign
+      ## this is based on the way we grouped campaigns 
+      ## TO DO: check to see what not assuming this does to vacc cov
+      ## otherwise just maximum possible for that vill
+      
+      ## Get cell level vaccinated
+      ## Get vacc prob for that grid proportional to total pop in that vill
+      ## basically means that places with more dogs are more likely to be vaccinated
+      ## Could also do it by the available # of dogs (sus_grid/sus_vill)
+      vacc_now <- data[now.vill, on = "villcode"]
+      ## make sure order is preserved!  
+      vacc_now <- vacc_now[order(match(vacc_now$cell_id, data$cell_id)), ]
+      vacc_now$sus <- S[, t-1]
+      vacc_now[, vacc_prob := ifelse(Sdogs == 0 , 1e-6, sus/Sdogs)]
+      vacc_now[, n_vacc := as.double(rmultinom(1, size = first(vacc_new), 
+                                               prob = vacc_prob)), 
+               by = villcode]
+      
+      ## Set so that newly vaccinated cannot exceed the number sus in that grid cell
+      ## Way to do 1e-6 multinomial cheat and still be okay 
+      ## Keeping track of vacc individuals that we lose
+      vacc_now$leftovers <- ifelse(vacc_now$n_vacc > vacc_now$sus, 
+                                   vacc_now$n_vacc - vacc_now$sus, 0)
+      vacc_now$n_vacc <- ifelse(vacc_now$n_vacc > vacc_now$sus, vacc_now$sus,
+                                vacc_now$n_vacc)
+      
+      ## need to change unnacounted so that it's about the vill level sum instead!
+      unaccounted[t] <- sum(vacc_now$leftovers, na.rm = TRUE)
+      vacc_new <- now.vill$vacc_new
+      n_vacc <- vacc_now$n_vacc
+    } else {
+      vacc_new <- 0
+      n_vacc <- 0
+    }
     
-    ## Get cell level vaccinated
-    ## Get vacc prob for that grid proportional to total pop in that vill
-    ## basically means that places with more dogs are more likely to be vaccinated
-    ## Could also do it by the available # of dogs (sus_grid/sus_vill)
-    vacc_now <- data[now.vill, on = "villcode"]
-    ## make sure order is preserved!  
-    vacc_now <- vacc_now[order(match(vacc_now$cell_id, data$cell_id)), ]
-    vacc_now$sus <- S[, t-1]
-    vacc_now[, vacc_prob := ifelse(Sdogs == 0, 1e-6, sus/Sdogs)]
-    vacc_now[, n_vacc := as.double(rmultinom(1, size = first(vacc_new), 
-                                             prob = vacc_prob)), 
-             by = villcode]
-    
-    ## Set so that newly vaccinated cannot exceed the number sus in that grid cell
-    ## Way to do 1e-6 multinomial cheat and still be okay 
-    ## Keeping track of vacc individuals that we lose
-    vacc_now$leftovers <- ifelse(vacc_now$n_vacc > vacc_now$sus, 
-                                 vacc_now$n_vacc - vacc_now$sus, 0)
-    vacc_now$n_vacc <- ifelse(vacc_now$n_vacc > vacc_now$sus, vacc_now$sus,
-                              vacc_now$n_vacc)
-    
-    ## need to change unnacounted so that it's about the vill level sum instead!
-    unaccounted[t] <- sum(vacc_now$leftovers, na.rm = TRUE)
-
+    vill_vacc[, t] <- (now.vill$Vdogs + vacc_new)/now.vill$Ndogs
+      
     ## ends up in same order (try length(vacc_now$cell_ID == data$cell_ID)[FALSE], should = 0)
     
     # 3b. Sequential transitions for S + V -----------------------------------------------
     ## S transitions, sequenctially for competing probs (-vacc, - deaths)
-    S[, t] <- S[, t-1] - vacc_now$n_vacc ## - subtract out newly vaccinated first
+    S[, t] <- S[, t-1] - n_vacc ## - subtract out newly vaccinated first
     S[, t] <- S[, t] - rbinom(nlocs, size = S[, t], prob = mu) ## then die
     
     ## V transitions, sequetially for competing probs (-waning, - deaths)
@@ -287,7 +293,7 @@ sim.IBM <- function(grid = SD_raster, data = grid_data, vacc = vacc_mat,
     V[, t] <- V[, t] - rbinom(nlocs, size = V[, t], prob = mu)
     
     ## Additive probs
-    V[, t] <- V[, t] + vacc_now$n_vacc
+    V[, t] <- V[, t] + n_vacc
     S[, t] <- S[, t] + rbinom(nlocs, size = S[, t-1] + V[, t-1], prob = births) + waning
     
     # 3c. Exposed to infectious --------------------------------------------------------------------
@@ -432,17 +438,17 @@ sim.IBM <- function(grid = SD_raster, data = grid_data, vacc = vacc_mat,
   }
   if (return_coords == TRUE) {
     return(list(N, S, E, I_all, I_dist, I_coords, vill_vacc))
-  }
-  if (return_coords == FALSE) {
+  } else {
     return(list(N, S, E, I_all, I_dist, vill_vacc))
   }
 }
 
 rabies_ts <- read.csv("data/cases.csv")
 
-system.time(
-  check <- sim.IBM(R_0 = 1.1, k = 0.5, p_revacc = 0.5)
-)
+system.time({
+  check <- sim.IBM(R_0 = 1.1, k = 0.5, p_revacc = 0.5, start_vacc = 0.2)
+})
+
 sum_times <- function(vector, steps, na.rm=TRUE) {    # 'matrix'
   nv <- length(vector)
   if (nv %% steps)
@@ -463,7 +469,8 @@ max(table(I_coords$progen_ID[I_coords$progen_ID != 0]))
 mIobs <- apply(I_all[,1:(ncol(I_all)-3)], 1 , sum_times, steps = 4)
 plot(rowSums(mIobs, na.rm = TRUE), type = "l")
 lines(rabies_ts$cases, col = "red")
-plot(colSums(S)/colSums(N), col = "blue", type = "l")
+plot(colSums(S)/colSums(N), col = "blue", type = "l", ylim = c(0, 1))
 plot(colSums(N), col = "blue", type = "l")
 
 mNobs <- N[, seq(1, tmax, by = 4)]
+
