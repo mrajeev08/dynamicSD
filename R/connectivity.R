@@ -9,6 +9,7 @@ get.adjgraph.shape <- function(shapefile){
   adj_graph <- graph_from_adjacency_matrix(adj_mat, mode = "undirected", diag = FALSE)
   return(adj_graph)
 }
+
 adj_graph <- get.adjgraph.shape(SD_shape)
 saveRDS(adj_graph, "~/Documents/Projects/rabies_sfunk/data/vill_graph.rds")
 
@@ -40,9 +41,14 @@ library(spdep)
 library(Matrix)
 # metric of connected patches with susceptibility greater than 0.8 (or threshold)
 # or if cov_mat then, metric of connected patches with coverage greater than 0.8 (or threshold)
+library(rgdal)
+SD_shape <- readOGR("~/Documents/Projects/dynamics_SD/data/SD_shape/Serengeti_villages UTM_region.shp")
+
 adj_vill <- poly2nb(SD_shape, row.names = SD_shape$VILLCODE)
 adj_mat <- nb2mat(adj_vill, style="B", zero.policy = TRUE)
 adj_graph <- graph_from_adjacency_matrix(adj_mat, mode = "undirected", diag = FALSE, add.rownames = "villcodes")
+saveRDS(adj_graph, "~/Documents/Projects/rabies_sfunk/data/vill_graph.rds")
+
 vill_vacc <- check[[7]]
 
 vill_vacc <- vill_vacc[order(match(rownames(vill_vacc), V(adj_graph)$villcodes)), ]
@@ -55,6 +61,7 @@ V(adj_graph)$villcodes == rownames(vill_vacc) ## to check order is right
 # vill_vacc <- vill_vacc[, 1:157]
 # write.csv(vill_vacc, "~/Documents/Projects/rabies_sfunk/data/vill_vaccmat.csv", row.names = TRUE)
 
+# write.csv(1- colSums(S)/colSums(N), "cov_ts.csv", row.names = FALSE)
 
 quartz()
 plot(apply(vill_vacc, 2, get.connmetric, adj_graph = adj_graph, threshold = 0.2)/75^2, 
