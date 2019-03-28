@@ -37,11 +37,11 @@ This is an adapted version of Elaine/Rebecca/Isty's models. It's discretized to 
 ### Vaccination
 
 ### Transmission
-The number of secondary cases for each individual is drawn from a negative binomial distribution with mean R_0 (i.e. the mean number of secondary cases in a completely susceptible population) and k (the dispersion parameter). Transmission failure due to reasons other than contact with a non-susceptible (i.e. failure for the virus to establish in a bitten dog, killing of exposed dogs, etc.) are implicit. The dispersion parameter also accounts implicitly for rabid cases where dogs are tied or killed after displaying symptoms, paralytic forms, biting other dead-end hosts, etc.). 
+The number of secondary cases for each individual is drawn from a negative binomial distribution with mean R_0 (i.e. the mean number of secondary cases in a completely susceptible population) and k (the dispersion parameter). Transmission failure due to reasons other than contact with a non-susceptible (i.e. failure for the virus to establish in a bitten dog, killing of exposed dogs, etc.) are implicit. The dispersion parameter also accounts implicitly for rabid cases where dogs are tied or killed after displaying symptoms, paralytic forms, biting other dead-end hosts, etc. 
 
-Movement is in continuous space and is sequential, that is infected individuals move sequentially for n number of secondary contacts. If an individual moves to an unoccupied cell or outside of the district, the step length and location are drawn again (1) (+ look up how to insert footnotes R markdown). 
+Movement is in continuous space and is sequential; that is, infected individuals move sequentially for n number of secondary contacts. If an individual moves to an unoccupied cell or outside of the district, the step length and location are drawn again (1) (+ look up how to insert footnotes R markdown). 
 
-The probability that transmission event is successful (i.e. probability that given contact is with a suspectible) is the proportion susceptible in that cell (S/N). This implicitly accounts for rebiting of exposed/infecteds and of course, vaccination. 
+The probability that a transmission event is successful (i.e. probability that a given contact is with a suspectible) is the proportion susceptible in that cell (S/N). This implicitly accounts for rebiting of exposed/infecteds and of course, vaccination. 
 
 *(1). This might have interesting implications if we were to estimate R_0. I think Dan mentioned this, but there are likely a small % of rabid dogs that leave the district or waste contact time roaming, so would be interesting to see if we allowed for this (nullifying the secondary transmission for those dogs in the district) if we would see that we need higher R_0 to observe our ts).*
 
@@ -55,7 +55,28 @@ Incursions happen at some rate *iota*
 summary(cars)
 ```
 
-## Including Plots
+### Simulation time 
+- largely depends on the # of infecteds in the population (so larger pops + R0s will take a longer time).
+- show relationship between # of cases and sim time...
+
+## Preliminary simulations
+### Endemic SD
+### Endemic no-control
+### Elimination
+
+## Estimation using synthetic likelihood
+
+## Scaling up: IBM
+### Endemic SD
+### Endemic no-control
+### Elimination
+
+## Scaling up: metapopulation
+
+## Scaling up: non-spatial model
+### Endemic SD
+#### Base
+#### With connectivity candidates
 
 You can also embed plots, for example:
 

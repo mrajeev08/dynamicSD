@@ -28,9 +28,9 @@ res(r) <- 1000
 SD_raster <- rasterize(SD_shape, r)
 
 ## Data by cellID
-grid_data <- get.grid(shapefile = SD_shape, resolution = 1000, pop = pop_data, census = census_data,
-                      deaths = 0.44)
+grid_data <- get.demdata(shapefile = SD_shape, res_meters = 1000, pop = pop_data, census = census_data)
 values(SD_raster) <- grid_data$cell_id ## cell IDs as values
+
 ## create coordinates of raster
 coords <- coordinates(SD_raster)
 grid_data$x_coord <- coords[, 1]
@@ -73,7 +73,7 @@ sim.IBM <- function(grid = SD_raster, data = grid_data, vacc = vacc_mat,
                     # weekly number of incursions and scaling factor 
                     sigma = get.prob(rate = 7/22.3, step = 1), 
                     # weekly rate to prob exp -> inf
-                    births = get.prob(rate = grid_data$births, step = 52),
+                    births = get.prob(rate = 0.44 + (grid_data$growth - 1), step = 52),
                     cell_id = grid_data$cell_id,
                     nlocs = nrow(grid_data),
                     # annual birth rate to prob
@@ -84,18 +84,18 @@ sim.IBM <- function(grid = SD_raster, data = grid_data, vacc = vacc_mat,
                     dispersalShape = 0.3484, dispersalScale = 41.28/100, # from Rebecca
                     return_coords = TRUE) {
 
-  # Unhash for testing! -------------------------------------------------------------------------
+  # ## Unhash for testing! -------------------------------------------------------------------------
   # grid = SD_raster; data = grid_data; vacc = vacc_mat;
-  # I_seed = 2; start_vacc = 0.2;  
-  # R_0 = 1.05; k = 0.2; 
-  # iota = 1; scale_iota = 1;
-  # # weekly number of incursions and scaling factor 
+  # I_seed = 2; start_vacc = 0.2;
+  # R_0 = 1.05; k = 0.2;
+  # inc_rate = incs;
+  # # weekly number of incursions and scaling factor
   # sigma = get.prob(rate = 7/22.3, step = 1); # weekly rate to prob exp -> inf
-  # births = get.prob(rate = grid_data$births, step = 52); # annual birth rate to prob
-  # mu = get.prob(rate = 0.44, step = 52); # annual death rate to prob 
+  # births = get.prob(rate = 0.44 + (grid_data$growth - 1), step = 52); # annual birth rate to prob
+  # mu = get.prob(rate = 0.44, step = 52); # annual death rate to prob
   # ntimes = tmax; # maximum time step
-  # nu = get.prob(rate = 0.33, step = 52); 
-  # p_revacc = 0.5; 
+  # nu = get.prob(rate = 0.33, step = 52);
+  # p_revacc = 0.5; nlocs = nrow(grid_data); cell_id = grid_data$cell_id;
   # # annual waning rate to prob + probability of revaccination
   # dispersalShape = 0.3484; dispersalScale = 41.28/100;
   ## No vacc scenario
@@ -256,7 +256,7 @@ sim.IBM <- function(grid = SD_raster, data = grid_data, vacc = vacc_mat,
       ## make sure order is preserved!  
       vacc_now <- vacc_now[order(match(vacc_now$cell_id, data$cell_id)), ]
       vacc_now$sus <- S[, t-1]
-      vacc_now[, vacc_prob := ifelse(Sdogs == 0 , 1e-6, sus/Sdogs)]
+      vacc_now[, vacc_prob := ifelse(Sdogs == 0 , 1e-10, sus/Sdogs)]
       vacc_now[, n_vacc := as.double(rmultinom(1, size = first(vacc_new), 
                                                prob = vacc_prob)), 
                by = villcode]
@@ -446,7 +446,7 @@ sim.IBM <- function(grid = SD_raster, data = grid_data, vacc = vacc_mat,
 rabies_ts <- read.csv("data/cases.csv")
 
 system.time({
-  check <- sim.IBM(R_0 = 1.1, k = 0.5, p_revacc = 0.5, start_vacc = 0.2)
+  check <- sim.IBM(R_0 = 1.1, k = 0.5, p_revacc = 0, start_vacc = 0.2)
 })
 
 sum_times <- function(vector, steps, na.rm=TRUE) {    # 'matrix'
@@ -470,6 +470,7 @@ mIobs <- apply(I_all[,1:(ncol(I_all)-3)], 1 , sum_times, steps = 4)
 plot(rowSums(mIobs, na.rm = TRUE), type = "l")
 lines(rabies_ts$cases, col = "red")
 plot(colSums(S)/colSums(N), col = "blue", type = "l", ylim = c(0, 1))
+plot(1 - colSums(S)/colSums(N), col = "blue", type = "l", ylim = c(0, 0.6)) 
 plot(colSums(N), col = "blue", type = "l")
 
 mNobs <- N[, seq(1, tmax, by = 4)]
