@@ -12,7 +12,9 @@ library(data.table)
 library(microbenchmark)
 
 ## Source in functions
-source("functions.R")
+source("R/data_functions.R")
+source("R/sus_functions.R")
+
 source("R/utils.R")
 
 ## Data
@@ -27,7 +29,7 @@ res(r) <- 1000
 SD_raster <- rasterize(SD_shape, r)
 
 ## Data by cellID
-grid_data <- get.grid(shapefile = SD_shape, resolution = 1000, pop = pop_data, census = census_data,
+grid_data <- get.demdata(shapefile = SD_shape, res_meters = 1000, pop = pop_data, census = census_data,
                       deaths = 0.44)
 
 ## Need for time step functions within data cleaning
@@ -52,7 +54,7 @@ ts %>%
 # Unhash for testing! -------------------------------------------------------------------------
 grid = SD_raster; data = grid_data; vacc = vacc_mat;
 I_seed = 2; start_vacc = 0.2;  
-R_0 = 1.8; k = 0.4; 
+R_0 = 1.2; k = 0.4; 
 iota = 1; scale_iota = 1;
 # weekly number of incursions and scaling factor 
 sigma = get.prob(rate = 7/22.3, step = 1); # weekly rate to prob exp -> inf
