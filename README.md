@@ -1,3 +1,13 @@
-# dynamics_SD
+## Modeling rabies dynamics in the Serengeti
 
-The dynamics of canine rabies in the Serengeti District, Tanzania
+### Background
+
+### Individual based model of transmission
+
+### Percolation thresholds
+
+### Metapopulation models
+
+### Mass-action models (POMP)
+
+### Estimating the mixing parameter
