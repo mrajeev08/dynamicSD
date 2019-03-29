@@ -59,6 +59,10 @@ ts %>%
   dplyr::select(week, total, villcode) %>%
   spread(week, total, fill = 0) %>%
   filter(!is.na(villcode)) -> vacc_mat
+vacc_mat <- as.data.table(list(villcode = grid_data$villcode, 
+                               cell_id = grid_data$cell_id))[vacc_mat, on = "villcode"]
+vacc_mat <- vacc_mat[order(match(vacc_mat$cell_id, grid_data$cell_id)), ] 
+vacc_mat <- as.matrix(vacc_mat[, c("cell_id","villcode"):=NULL]) ## getting rid of id cols
 
 ## rep incursions (so as to include scaling factor)
 iota = 1; scale_iota = 1;
@@ -85,28 +89,26 @@ sim.IBM <- function(grid = SD_raster, data = grid_data, vacc = vacc_mat,
                     return_coords = TRUE) {
 
   # ## Unhash for testing! -------------------------------------------------------------------------
-  # grid = SD_raster; data = grid_data; vacc = vacc_mat;
-  # I_seed = 2; start_vacc = 0.2;
-  # R_0 = 1.05; k = 0.2;
-  # inc_rate = incs;
-  # # weekly number of incursions and scaling factor
-  # sigma = get.prob(rate = 7/22.3, step = 1); # weekly rate to prob exp -> inf
-  # births = get.prob(rate = 0.44 + (grid_data$growth - 1), step = 52); # annual birth rate to prob
-  # mu = get.prob(rate = 0.44, step = 52); # annual death rate to prob
-  # ntimes = tmax; # maximum time step
-  # nu = get.prob(rate = 0.33, step = 52);
-  # p_revacc = 0.5; nlocs = nrow(grid_data); cell_id = grid_data$cell_id;
-  # # annual waning rate to prob + probability of revaccination
-  # dispersalShape = 0.3484; dispersalScale = 41.28/100;
-  ## No vacc scenario
-  # vacc_mat[,2:ncol(vacc_mat)] <- ifelse(vacc_mat[,2:ncol(vacc_mat)] > 0, 0, 0)
+  grid = SD_raster; data = grid_data; vacc = vacc_mat;
+  I_seed = 2; start_vacc = 0.2;
+  R_0 = 1.05; k = 0.2;
+  inc_rate = incs;
+  # weekly number of incursions and scaling factor
+  sigma = get.prob(rate = 7/22.3, step = 1); # weekly rate to prob exp -> inf
+  births = get.prob(rate = 0.44 + (grid_data$growth - 1), step = 52); # annual birth rate to prob
+  mu = get.prob(rate = 0.44, step = 52); # annual death rate to prob
+  ntimes = tmax; # maximum time step
+  nu = get.prob(rate = 0.33, step = 52);
+  p_revacc = 0.5; nlocs = nrow(grid_data); cell_id = grid_data$cell_id;
+  # annual waning rate to prob + probability of revaccination
+  dispersalShape = 0.3484; dispersalScale = 41.28/100;
+  # No vacc scenario
+  # vacc_mat[vacc_mat > 0 ] <- 0
   # start_vacc = 0
   
   # 1. Set-up and tstep 1 -----------------------------------------------------------------------
   row_id <- 1:nlocs
-  vill_vacc <- matrix(NA, nrow = nrow(vacc), ncol = ncol(vacc))
-  rownames(vill_vacc) <-  vacc$village_ID
-  
+
   # state matrices
   S <- V <- N <- matrix(0, nrow = nlocs, ncol = ntimes)
   I_dist <- I_all <- E <- matrix(0, nrow = nlocs, ncol = ntimes)
@@ -119,7 +121,7 @@ sim.IBM <- function(grid = SD_raster, data = grid_data, vacc = vacc_mat,
   # 2. Simulating infection in first timestep ------------------------------------------------------
   # Seeding cases (as if from outside!)
   # pick random location to start I seeds
-  I_dist[ ,1] <- 0
+  I_dist[, 1] <- 0
   I_locs <- sample((row_id)[which(!is.na(data$start_pop))], I_seed)
   I_dist[I_locs, 1] <- 1
   
@@ -216,71 +218,22 @@ sim.IBM <- function(grid = SD_raster, data = grid_data, vacc = vacc_mat,
   S[, 1] <- S[, 1] - E[ ,1] ## subtract out newly exposed guys from S
   unaccounted <- rep(0, ntimes) ## keeping track of any vacc individuals that went unaccounted for
   
+  ## Timesteps to simulate vaccination for
+  vstep <- which(colSums(vacc) > 0, arr.ind = TRUE)
+  
   # 3. Simulate for rest of time steps -------------------------------------------------------------
   for (t in 2:ntimes) {
     # t = 2
     # print(paste(t, "/", tmax, "weeks"))
     
     # 3a. Simulate vaccination ---------------------------------------------------------------------
-    ## TO DO: ## make sure leftover vaccinated goes to adjacent vills
-    now.vill <- as.data.table(list(villcode = data$villcode, 
-                                     Sdogs = S[, t-1], Vdogs = V[, t-1], 
-                                     Ndogs = N[, t-1]))
-    now.vill <- now.vill[, .(Sdogs = sum(Sdogs, na.rm = TRUE), 
-                               Vdogs = sum(Vdogs, na.rm = TRUE),
-                               Ndogs = sum(Ndogs, na.rm = TRUE)), 
-                           by = villcode]
-    if (t == 2){
-      rownames(vill_vacc) <- now.vill$villcode
-    }
-    
-    if (sum(vacc_mat[, t + 1]) > 0) {
-      now.vill$vacc <- vacc[, t + 1][match(now.vill$villcode, vacc$villcode)]
-      now.vill$revacc <- rbinom(nrow(now.vill), size = now.vill$Vdogs, prob = p_revacc)
-      ## dogs currently vaccinated that were revaccinated
-      now.vill$vacc_new <- ifelse(now.vill$vacc - now.vill$revacc <= 0, now.vill$vacc, 
-                                  ifelse((now.vill$vacc - now.vill$revacc) > now.vill$Sdogs, 
-                                         now.vill$Sdogs, 
-                                         now.vill$vacc - now.vill$revacc))
-      ## dogs newly vaccinated accounting for revacc(max)
-      ## if revacc is bigger than # vaccinated total, likely indicates an additive, smaller campaign
-      ## this is based on the way we grouped campaigns 
-      ## TO DO: check to see what not assuming this does to vacc cov
-      ## otherwise just maximum possible for that vill
-      
-      ## Get cell level vaccinated
-      ## Get vacc prob for that grid proportional to total pop in that vill
-      ## basically means that places with more dogs are more likely to be vaccinated
-      ## Could also do it by the available # of dogs (sus_grid/sus_vill)
-      vacc_now <- data[now.vill, on = "villcode"]
-      ## make sure order is preserved!  
-      vacc_now <- vacc_now[order(match(vacc_now$cell_id, data$cell_id)), ]
-      vacc_now$sus <- S[, t-1]
-      vacc_now[, vacc_prob := ifelse(Sdogs == 0 , 1e-10, sus/Sdogs)]
-      vacc_now[, n_vacc := as.double(rmultinom(1, size = first(vacc_new), 
-                                               prob = vacc_prob)), 
-               by = villcode]
-      
-      ## Set so that newly vaccinated cannot exceed the number sus in that grid cell
-      ## Way to do 1e-6 multinomial cheat and still be okay 
-      ## Keeping track of vacc individuals that we lose
-      vacc_now$leftovers <- ifelse(vacc_now$n_vacc > vacc_now$sus, 
-                                   vacc_now$n_vacc - vacc_now$sus, 0)
-      vacc_now$n_vacc <- ifelse(vacc_now$n_vacc > vacc_now$sus, vacc_now$sus,
-                                vacc_now$n_vacc)
-      
-      ## need to change unnacounted so that it's about the vill level sum instead!
-      unaccounted[t] <- sum(vacc_now$leftovers, na.rm = TRUE)
-      vacc_new <- now.vill$vacc_new
-      n_vacc <- vacc_now$n_vacc
+    ##' Only do it all if vaccinated is greater than 0
+    if (t %in% vstep) {
+      n_vacc <- sim.vacc(locid = data$villcode, Sdog = S[, t-1], Ndogs = N[, t-1], Vdogs = V[, t-1],
+                         vill_vacc = vacc[, t], p_revacc = p_revacc, p_allocate = 1)
     } else {
-      vacc_new <- 0
       n_vacc <- 0
     }
-    
-    vill_vacc[, t] <- (now.vill$Vdogs + vacc_new)/now.vill$Ndogs
-      
-    ## ends up in same order (try length(vacc_now$cell_ID == data$cell_ID)[FALSE], should = 0)
     
     # 3b. Sequential transitions for S + V -----------------------------------------------
     ## S transitions, sequenctially for competing probs (-vacc, - deaths)
