@@ -1,4 +1,5 @@
-##' 1. Simulate vaccination ------------------------------------------------------------------------
+##' Simulate vaccination 
+##' ------------------------------------------------------------------------------------------------
 #' Simulate vaccination campaigns spatially 
 #'
 #' \code{sim.vacc} returns the dogs newly vaccinated in each grid cell. 
@@ -22,6 +23,9 @@
 #' 
 #' @return Vector of either same length as number of grid cells with number of newly vaccinated dogs 
 #'   in each grid cell or 0L returned when no vaccination occured
+#'   
+#' @section Dependencies:
+#'     Packages: data.table, 
 
 sim.vacc <- function(locid = data$villcode, Sdogs, Ndogs, Vdogs, p_revacc, p_allocate = 1, 
                      vill_vacc, ...) {
@@ -76,11 +80,8 @@ sim.vacc <- function(locid = data$villcode, Sdogs, Ndogs, Vdogs, p_revacc, p_all
     vacc_grid <- vacc_grid[vaccs, on = "order_id"]
     vacc_grid$n_vacc[is.na(vacc_grid$n_vacc)] <- 0
   }
-
   
   ##' Set so that newly vaccinated cannot exceed the number sus in that grid cell
-  ##' If we set p_allocate to the prob from the census, then we might lose lots of potential 
-  ##' vaccinations this way
   vacc_grid[, n_vacc := as.double(rmultinom(1, size = first(vacc_new), 
                                             prob = vacc_prob)), by = locid]
   vacc_grid$n_vacc <- ifelse(vacc_grid$n_vacc > vacc_grid$sus, vacc_grid$sus,
@@ -91,3 +92,177 @@ sim.vacc <- function(locid = data$villcode, Sdogs, Ndogs, Vdogs, p_revacc, p_all
   n_vacc <- vacc_grid$n_vacc
   return(n_vacc)
 }
+
+##' Simulating incursions 
+##' ------------------------------------------------------------------------------------------------
+#' Simulate incursions spatially
+#' 
+#' \code{sim.incursions} simulates incursions draw from a avg number per timestep and assigns spatially.
+#' 
+#' This function 
+#' @param Paramters
+#' @return Returned
+#' @section Dependencies:
+#'     List dependencies here, i.e. packages and other functions
+
+sim.incursions <- function(incursions, counter, row_ids, cell_ids, tstep, 
+                           x_coord, y_coord) {
+  start_counter <- counter + 1 
+  counter <- counter + incursions
+  I_all <- rep(0, length(row_ids))
+    
+  ## only happen in populated places
+  I_locs <- sample(row_id, incursions) 
+  I_all[I_locs] <- 1 
+    
+  I_coords_out <- data.table(ID = start_counter:counter, tstep = tstep, 
+                               x_coord = x_coord[I_locs],
+                               y_coord = y_coord[I_locs], progen_ID = 0, path_ID = NA, 
+                               cell_id = cell_id[I_locs], sus = NA,
+                               trans = NA, infectious = 1, 
+                               secondaries = NA)
+  return(list(I_coords_out = I_coords_out, I_all = I_all, counter = counter))
+}
+
+
+
+##' Simulate biting
+##'  -----------------------------------------------------------------------------------------------
+#' Simulate biting and movement
+#' 
+#' \code{sim.bites} simulates bites and movement on landscape
+#' 
+#' Number of secondary cases is drawn from a negative binomial distribution with mean R0 and 
+#' dispersion parameter k. Movement is sequential so that the dispersal kernal is movement 
+#' between bite events (as per Rebecca). Cell ids are determined by subtracting 
+#' from the top left corner of grid to get 1-based indexes (use bbox to figure this out).
+#' 
+#' @param secondaries number of secondary cases for each infectious at tstep
+#' @param x_coord UTM Easting for each infectious case at tstep
+#' @param y_coord UTM Northing for each infectious case at tstep
+#' @param ids case IDs for each infectious case at tstep
+#' @param counter the counter for the ID of each potential infectious individual
+#' @param grid gridded raster of study area 
+#' @param res_m resolution of raster in meters 
+#' @param cells_pop populated cells in raster (i.e. where dogs are allowed to move, could also define
+#'   this in other ways)
+#' @param dispersalShape shape parameter of Weibull parameterized as per Rebecca.
+#' @param dispersalScale scale parameter of Weibull 
+#' @param x_topl top left x coordinate of grid, to calculate cell_id based on 1-based cell indexing
+#' @param y_topl top left y coordinate of grid
+#' @param tstep current timestep 
+#' 
+#' @return Returns data.table of exposures in current timestep with following columns: ID, tstep, 
+#'   x_coord, y_coord, progen_ID, path_ID, cell_id, sus, trans, infectious, secondaries, 
+#'   
+#' @section Dependencies:
+#'     Packages: raster(although can run without it if grid is passed as a matrix of cell ids)
+
+sim.bites <- function(secondaries = I_coords_now$secondaries, x_coords = I_coords_now$x_coord, 
+                      y_coords = I_coords_now$y_coord, ids = I_coords_now$ID, counter, grid, res_m, 
+                      cells_pop, dispersalShape, dispersalScale, x_topl, y_topl, tstep = t) {
+  ##' TO DO:
+  ##' Vectorize movements between progenitors (i.e. the number of movements = # of progenitors)
+  ##' Only really need to do that if dealing with lots of infected in one timestep
+  ##' 
+  ##' Need to think about what makes sense in terms of restricting movement
+  ## if not restricting to populated places then cells should be anywhere in the district
+  ##' if not restricting to district then doggies can leave if they want so then either
+  ##' they bite in a populated place within the district or they go outside the district 
+  ##' which means coords are in greater than x_min/y_max zone...
+  ##' ...need to think about what's plausible and whether it would make a difference... 
+
+  store_coords_all <- vector("list", length(secondaries)) 
+  
+  for (i in 1:length(secondaries)) {
+    if (secondaries[i] > 0) {
+      
+      store_coords <- vector("list", secondaries[i]) 
+      
+      for (j in 1:secondaries[i]){ 
+        counter <- counter + 1
+        if (j == 1) { # need progenitor coords for 1st movement
+          origin_x <- x_coord[i]
+          origin_y <- y_coord[i]
+        } else {
+          origin_x <- last_coords[1]
+          origin_y <- last_coords[2]
+        }
+        within <- 0
+        while (within == 0) {
+          distance <- rweibull(1, shape = dispersalShape, 
+                               scale = dispersalScale) # Distance to move in km
+          angle <- runif(n = 1, min = 0, max = 2*pi)  # Angle to move at
+          
+          # Convert to a vector and move
+          x_new <- (sin(angle) * distance * 1000) + origin_x # convert to m
+          y_new <- (cos(angle) * distance * 1000) + origin_y
+          
+          ## This means can go anywhere including outside of district
+          cell <- grid[ceiling(-(y_new - y_topl)/res_m), ceiling((x_new - x_topl)/res_m)]
+          
+          ## This bit means only in populated places and doggies don't leave the district
+          within <- ifelse(cell %in% cells_pop, 1, 0)
+        }
+        store_coords[[j]] <- list(ID = counter, tstep = tstep, x_coord = x_new, y_coord = y_new,  
+                                  progen_ID = ids[i], path_ID = j, cell_id = cell, sus = NA, 
+                                  trans = NA, infectious = 0, secondaries = NA)
+        last_coords <- c(x_new, y_new)
+      }
+      store_coords_all[[i]] <- store_coords
+    }
+  }
+  E_coords_now <- rbindlist(lapply(store_coords_all, rbindlist))
+  return(list(E_coords_now = E_coords_now, counter = counter))
+}
+
+##' Simulate transmission
+##'  -----------------------------------------------------------------------------------------------
+#' Simulating transmission 
+#' 
+#' \code{sim.trans} simulates transmission events (i.e. whether a contact (bite) is with a 
+#' susceptible individual)
+#' 
+#' Details
+#' 
+#' @param Paramters
+#' @return Returned
+#' @section Dependencies:
+#'     List dependencies here, i.e. packages and other functions
+
+sim.trans <- function(E_coords_now, row_id, S, N, sequential = TRUE) {
+  
+  ## probability that contact will be with a susceptible = St/Nt-1
+  E_coords_now$sus <- S[row_id[match(E_coords_now$cell_id, cell_id)]]
+  E_coords_now$N <- N[row_id[match(E_coords_now$cell_id, cell_id)]]
+  
+  if(sequential == TRUE) {
+    ids <-  unique(E_coords_now$cell_id)
+    setkey(E_coords_now, cell_id)
+    
+    for (i in 1:length(ids)) {
+      E_trans <- E_coords_now[J(ids[i])]
+      done <- 0
+      max <- E_trans$sus[1]
+      for(j in 1:nrow(E_trans)){
+        if (done < max){
+          E_trans$trans[j] <- rbinom(1, size = 1, prob = ifelse(E_trans$N[j] == 0, 0, 
+                                                                E_trans$sus[j]/E_trans$N[j]))
+          E_coords_now$trans[match(E_trans$ID[j], E_coords_now$ID)] <- E_trans$trans[j]
+          done <- done + E_trans$trans[j]
+        }
+      }
+    }
+    E_coords_now$sus <- E_coords_now$sus/E_coords_now$N
+  } else {
+    E_coords_now$trans <- rbinom(1, size = 1, prob = ifelse(E_coords_now$N == 0, 0, 
+                                                            E_coords_now$sus/E_coords_now$N))
+  }
+  E_coords_now[, N := NULL]
+  E_coords_now <- E_coords_now[!is.na(trans) & trans == 1]
+  return(E_coords_now)
+}
+ 
+
+
+
