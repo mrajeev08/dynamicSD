@@ -82,8 +82,6 @@ sim.vacc <- function(locid = data$villcode, Sdogs, Ndogs, Vdogs, p_revacc, p_all
   }
   
   ##' Set so that newly vaccinated cannot exceed the number sus in that grid cell
-  vacc_grid[, n_vacc := as.double(rmultinom(1, size = first(vacc_new), 
-                                            prob = vacc_prob)), by = locid]
   vacc_grid$n_vacc <- ifelse(vacc_grid$n_vacc > vacc_grid$sus, vacc_grid$sus,
                              vacc_grid$n_vacc)
   ##' To do = add as test!
@@ -109,19 +107,17 @@ sim.incursions <- function(incursions, counter, row_ids, cell_ids, tstep,
                            x_coord, y_coord) {
   start_counter <- counter + 1 
   counter <- counter + incursions
-  I_all <- rep(0, length(row_ids))
+  I_all <- rep(0, length(cell_ids))
     
   ## only happen in populated places
-  I_locs <- sample(row_id, incursions) 
-  I_all[I_locs] <- 1 
+  I_locs <- sample(row_ids, incursions) 
     
   I_coords_out <- data.table(ID = start_counter:counter, tstep = tstep, 
                                x_coord = x_coord[I_locs],
                                y_coord = y_coord[I_locs], progen_ID = 0, path_ID = NA, 
-                               cell_id = cell_id[I_locs], sus = NA,
-                               trans = NA, infectious = 1, 
+                               cell_id = cell_ids[I_locs], infectious = 1, 
                                secondaries = NA)
-  return(list(I_coords_out = I_coords_out, I_all = I_all, counter = counter))
+  return(list(I_coords_out = I_coords_out, I_locs = I_locs, counter = counter))
 }
 
 
@@ -142,7 +138,7 @@ sim.incursions <- function(incursions, counter, row_ids, cell_ids, tstep,
 #' @param y_coord UTM Northing for each infectious case at tstep
 #' @param ids case IDs for each infectious case at tstep
 #' @param counter the counter for the ID of each potential infectious individual
-#' @param grid gridded raster of study area 
+#' @param grid matrix of cell_ids from gridded raster of study area 
 #' @param res_m resolution of raster in meters 
 #' @param cells_pop populated cells in raster (i.e. where dogs are allowed to move, could also define
 #'   this in other ways)
@@ -156,10 +152,10 @@ sim.incursions <- function(incursions, counter, row_ids, cell_ids, tstep,
 #'   x_coord, y_coord, progen_ID, path_ID, cell_id, sus, trans, infectious, secondaries, 
 #'   
 #' @section Dependencies:
-#'     Packages: raster(although can run without it if grid is passed as a matrix of cell ids)
+#'     Packages: None
 
-sim.bites <- function(secondaries = I_coords_now$secondaries, x_coords = I_coords_now$x_coord, 
-                      y_coords = I_coords_now$y_coord, ids = I_coords_now$ID, counter, grid, res_m, 
+sim.bites <- function(secondaries = I_coords_now$secondaries, x_coord = I_coords_now$x_coord, 
+                      y_coord = I_coords_now$y_coord, ids = I_coords_now$ID, counter, grid, res_m, 
                       cells_pop, dispersalShape, dispersalScale, x_topl, y_topl, tstep = t) {
   ##' TO DO:
   ##' Vectorize movements between progenitors (i.e. the number of movements = # of progenitors)
@@ -171,7 +167,7 @@ sim.bites <- function(secondaries = I_coords_now$secondaries, x_coords = I_coord
   ##' they bite in a populated place within the district or they go outside the district 
   ##' which means coords are in greater than x_min/y_max zone...
   ##' ...need to think about what's plausible and whether it would make a difference... 
-
+  
   store_coords_all <- vector("list", length(secondaries)) 
   
   for (i in 1:length(secondaries)) {
@@ -199,14 +195,16 @@ sim.bites <- function(secondaries = I_coords_now$secondaries, x_coords = I_coord
           y_new <- (cos(angle) * distance * 1000) + origin_y
           
           ## This means can go anywhere including outside of district
-          cell <- grid[ceiling(-(y_new - y_topl)/res_m), ceiling((x_new - x_topl)/res_m)]
-          
+          col <- ceiling((x_new - x_topl)/res_m)
+          row <- ceiling(-(y_new - y_topl)/res_m)
+          cell <- ifelse(row %in% 1:nrow(grid) & col %in% 1:ncol(grid), grid[row, col], 0)
           ## This bit means only in populated places and doggies don't leave the district
+          
           within <- ifelse(cell %in% cells_pop, 1, 0)
         }
+  
         store_coords[[j]] <- list(ID = counter, tstep = tstep, x_coord = x_new, y_coord = y_new,  
-                                  progen_ID = ids[i], path_ID = j, cell_id = cell, sus = NA, 
-                                  trans = NA, infectious = 0, secondaries = NA)
+                                  progen_ID = ids[i], path_ID = j, cell_id = cell, infectious = 0L, secondaries = NA_integer_)
         last_coords <- c(x_new, y_new)
       }
       store_coords_all[[i]] <- store_coords
@@ -225,12 +223,12 @@ sim.bites <- function(secondaries = I_coords_now$secondaries, x_coords = I_coord
 #' 
 #' Details
 #' 
-#' @param Paramters
+#' @param Parameters
 #' @return Returned
 #' @section Dependencies:
 #'     List dependencies here, i.e. packages and other functions
 
-sim.trans <- function(E_coords_now, row_id, S, N, sequential = TRUE) {
+sim.trans <- function(E_coords_now, cell_id, row_id, S, N, sequential = TRUE) {
   
   ## probability that contact will be with a susceptible = St/Nt-1
   E_coords_now$sus <- S[row_id[match(E_coords_now$cell_id, cell_id)]]
@@ -253,11 +251,13 @@ sim.trans <- function(E_coords_now, row_id, S, N, sequential = TRUE) {
         }
       }
     }
-    E_coords_now$sus <- E_coords_now$sus/E_coords_now$N
+    
   } else {
     E_coords_now$trans <- rbinom(1, size = 1, prob = ifelse(E_coords_now$N == 0, 0, 
                                                             E_coords_now$sus/E_coords_now$N))
   }
+  
+  E_coords_now$sus <- E_coords_now$sus/E_coords_now$N
   E_coords_now[, N := NULL]
   E_coords_now <- E_coords_now[!is.na(trans) & trans == 1]
   return(E_coords_now)
@@ -265,4 +265,20 @@ sim.trans <- function(E_coords_now, row_id, S, N, sequential = TRUE) {
  
 
 
-
+sim.trans <- function(cell_id, exps, sus, pop) {
+  transmission <- vector()
+  for(i in 1:length(cell_id)) {
+    for(j in 1:exps[i]) {
+      if(pop[i] > 0) {
+        trans <- rbinom(1, size = 1, prob = sus[i]/pop[i])
+        sus[i] <- sus[i] - trans
+      } else {
+        trans <- 0
+      }
+      transmission <- c(transmission, trans)
+    }
+  }
+  cell_ids <- rep(cell_id, exps)
+  path_ids <- unlist(lapply(exps, function(x) 1:x))
+  return(as.data.table(list(cell_id = cell_ids, path_ID = path_ids, trans = transmission)))
+}
