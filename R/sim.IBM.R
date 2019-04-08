@@ -42,8 +42,8 @@ sim.IBM <- function(grid = as.matrix(SD_raster), data = grid_data, vacc = vacc_m
   ## Create infected coordinate data frame
   I_coords <- data.table(ID = 1:I_seed, tstep = rep(1, I_seed), x_coord = data$x_coord[I_locs], 
                          y_coord = data$y_coord[I_locs], progen_ID = rep(0, I_seed),
-                         path_ID = rep(NA, I_seed), cell_id = cell_id[I_locs],
-                         infectious = 0L, infectious = rep(1, I_seed), 
+                         path_ID = rep(NA, I_seed), cell_id = cell_id[I_locs], 
+                         trans = NA_integer_, infectious = 0L, infectious = rep(1, I_seed), 
                          secondaries = 1) ## seeding as single case in first timestep
   
   ## Exposed in first timestep
@@ -57,17 +57,8 @@ sim.IBM <- function(grid = as.matrix(SD_raster), data = grid_data, vacc = vacc_m
   E_coords <- E_coords_first[["E_coords_now"]]
   
   if(nrow(E_coords > 0)) {
-    byID <-E_coords[,.(exps = .N), by = cell_id]
-    byID$sus <- S[row_id[match(byID$cell_id, cell_id)], 1]
-    byID$N <- N[row_id[match(byID$cell_id, cell_id)], 1]
-    
-    ## simulate sequential transmission
-    byID <- sim.trans(cell_id = byID$cell_id, exps = byID$cell_id, sus = byID$S,
-                      pop = byID$N)
-    
-    E_coords <- byID[E_coords, on = c("cell_id", "path_ID")]
-    E_coords <-E_coords[trans == 1]
-    
+    E_coords <- sim.trans(E_coords, cell_id = cell_id, row_id = row_id, S = S[, 1], N = N[, 1], 
+                          sequential = TRUE) 
     if (nrow(E_coords) > 0) {
       E_count <- E_coords[, list(count = length(ID)), by = cell_id]
       E[row_id[match(E_count$cell_id, cell_id)], 1] <- E_count$count ## add in newly exposed
@@ -83,7 +74,7 @@ sim.IBM <- function(grid = as.matrix(SD_raster), data = grid_data, vacc = vacc_m
   # 3. Simulate for rest of time steps -------------------------------------------------------------
   for (t in 2:ntimes) {
     # t = 2
-    # print(paste(t, "/", tmax, "weeks"))
+    print(paste(t, "/", tmax, "weeks"))
     
     # 3a. Simulate vaccination ---------------------------------------------------------------------
     ##' Only do it all if vaccinated is greater than 0
@@ -99,7 +90,7 @@ sim.IBM <- function(grid = as.matrix(SD_raster), data = grid_data, vacc = vacc_m
     S[, t] <- S[, t-1] - n_vacc ## - subtract out newly vaccinated first
     S[, t] <- S[, t] - rbinom(nlocs, size = S[, t], prob = mu) ## then die
     
-    ## V transitions, sequentially for competing probs (-waning, - deaths)
+    ## V transitions, sequetially for competing probs (-waning, - deaths)
     waning <- rbinom(nlocs, size = V[, t-1], prob = nu)
     V[, t] <- V[, t-1] - waning
     V[, t] <- V[, t] - rbinom(nlocs, size = V[, t], prob = mu)
@@ -107,7 +98,6 @@ sim.IBM <- function(grid = as.matrix(SD_raster), data = grid_data, vacc = vacc_m
     ## Additive probs
     V[, t] <- V[, t] + n_vacc
     S[, t] <- S[, t] + rbinom(nlocs, size = S[, t-1] + V[, t-1], prob = births) + waning
-    
     
     # 3c. Exposed to infectious --------------------------------------------------------------------
     ## exposed to infectious
@@ -137,6 +127,7 @@ sim.IBM <- function(grid = as.matrix(SD_raster), data = grid_data, vacc = vacc_m
                              y_coord = data$y_coord)
       counter <- incs[["counter"]]
       I_locs <- incs[["I_locs"]]
+      print(incs[["I_locs"]])
       I_all[I_locs, t] <- 1
       I_coords_now <- rbindlist(list(incs[["I_coords_out"]], I_coords_now), fill = TRUE, use.names = TRUE)
     }
@@ -162,19 +153,8 @@ sim.IBM <- function(grid = as.matrix(SD_raster), data = grid_data, vacc = vacc_m
         
         # 3f. Aggregate probability that contact is with susceptible -----------------------------------
         if(nrow(E_coords_now > 0)) {
-          ## probability that contact will be with a susceptible = St/Nt
-          byID <- E_coords_now[,.(exps = .N), by = cell_id]
-          byID$sus <- S[row_id[match(byID$cell_id, cell_id)], t]
-          byID$N <- N[row_id[match(byID$cell_id, cell_id)], t]
-          
-          ## simulate sequential transmission
-          byID <- sim.trans(cell_id = byID$cell_id, exps = byID$cell_id, sus = byID$S,
-                                          pop = byID$N)
-          
-          E_coords_now <- byID[E_coords_now, on = c("cell_id", "path_ID")]
-          
-          E_coords_now <- E_coords_now[trans == 1]
-          
+          E_coords_now <- sim.trans(E_coords_now, cell_id = cell_id, row_id = row_id, S = S[, t], N = N[, t], 
+                                    sequential = FALSE) 
           if (nrow(E_coords_now) > 0) {
             E_count <- E_coords_now[, list(count = length(ID)), by = cell_id]
             E_new[row_id[match(E_count$cell_id, cell_id)]] <- E_count$count ## add in newly exposed
