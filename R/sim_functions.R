@@ -114,9 +114,8 @@ sim.incursions <- function(incursions, counter, row_ids, cell_ids, tstep,
     
   I_coords_out <- data.table(ID = start_counter:counter, tstep = tstep, 
                                x_coord = x_coord[I_locs],
-                               y_coord = y_coord[I_locs], progen_ID = 0, path_ID = NA, 
-                               cell_id = cell_ids[I_locs], sus = NA,
-                               trans = NA, infectious = 1, 
+                               y_coord = y_coord[I_locs], progen_ID = 0, path_ID = NA, sus = NA,
+                               trans = NA, cell_id = cell_ids[I_locs], infectious = 1, 
                                secondaries = NA)
   return(list(I_coords_out = I_coords_out, I_locs = I_locs, counter = counter))
 }
@@ -230,33 +229,27 @@ sim.bites <- function(secondaries = I_coords_now$secondaries, x_coord = I_coords
 #' @section Dependencies:
 #'     List dependencies here, i.e. packages and other functions
 
-sim.trans <- function(E_coords_now, cell_id, row_id, S, N, sequential = TRUE) {
-  
-  ## probability that contact will be with a susceptible = St/Nt-1
+sim.trans <- function(E_coords_now, cell_id, row_id, S, N) {
+
+  ## probability that contact will be with a susceptible = St/Nt
   E_coords_now$sus <- S[row_id[match(E_coords_now$cell_id, cell_id)]]
   E_coords_now$N <- N[row_id[match(E_coords_now$cell_id, cell_id)]]
-  
-  if(sequential == TRUE) {
-    ids <-  unique(E_coords_now$cell_id)
-    setkey(E_coords_now, cell_id)
+
+  ids <-  unique(E_coords_now$cell_id)
+  setkey(E_coords_now, cell_id)
+
+  for (i in 1:length(ids)) {
+    E_trans <- E_coords_now[J(ids[i])]
+    sus <- E_trans$sus[1]
     
-    for (i in 1:length(ids)) {
-      E_trans <- E_coords_now[J(ids[i])]
-      done <- 0
-      max <- E_trans$sus[1]
-      for(j in 1:nrow(E_trans)){
-        if (done < max){
-          E_trans$trans[j] <- rbinom(1, size = 1, prob = ifelse(E_trans$N[j] == 0, 0, 
-                                                                E_trans$sus[j]/E_trans$N[j]))
-          E_coords_now$trans[match(E_trans$ID[j], E_coords_now$ID)] <- E_trans$trans[j]
-          done <- done + E_trans$trans[j]
-        }
+    for(j in 1:nrow(E_trans)){
+      if (sus > 0){
+        trans <- rbinom(1, size = 1, prob = ifelse(E_trans$N[j] == 0, 0,
+                                                   sus/E_trans$N[j]))
+        sus <- sus - trans
+        E_coords_now$trans[match(E_trans$ID[j], E_coords_now$ID)] <- trans
       }
     }
-    
-  } else {
-    E_coords_now$trans <- rbinom(1, size = 1, prob = ifelse(E_coords_now$N == 0, 0, 
-                                                            E_coords_now$sus/E_coords_now$N))
   }
   
   E_coords_now$sus <- E_coords_now$sus/E_coords_now$N
@@ -264,23 +257,5 @@ sim.trans <- function(E_coords_now, cell_id, row_id, S, N, sequential = TRUE) {
   E_coords_now <- E_coords_now[!is.na(trans) & trans == 1]
   return(E_coords_now)
 }
- 
 
 
-sim.trans <- function(cell_id, exps, sus, pop) {
-  transmission <- vector()
-  for(i in 1:length(cell_id)) {
-    for(j in 1:exps[i]) {
-      if(pop[i] > 0) {
-        trans <- rbinom(1, size = 1, prob = sus[i]/pop[i])
-        sus[i] <- sus[i] - trans
-      } else {
-        trans <- 0
-      }
-      transmission <- c(transmission, trans)
-    }
-  }
-  cell_ids <- rep(cell_id, exps)
-  path_ids <- unlist(lapply(exps, function(x) 1:x))
-  return(as.data.table(list(cell_id = cell_ids, path_ID = path_ids, trans = transmission)))
-}
