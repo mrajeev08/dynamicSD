@@ -20,7 +20,8 @@
 #'   @seealso [get.demdata()]). If set to 1 then vaccinations are allocated by the proportion of 
 #'   susceptible hosts available to be vaccinated at the village level that are in the grid cell. 
 #' @param vill_vacc vector of # vaccinated by village at time t for each grid cell
-#' 
+#' @param type vacc data being passed through, either simulated at cell level ("sim_cell"),
+#'   simulated at village level ("sim_vill"), or empirical # vaccinated from SD ("empirical")
 #' @return Vector of either same length as number of grid cells with number of newly vaccinated dogs 
 #'   in each grid cell or 0L returned when no vaccination occured
 #'   
@@ -28,66 +29,89 @@
 #'     Packages: data.table, 
 
 sim.vacc <- function(locid = data$villcode, Sdogs, Ndogs, Vdogs, p_revacc, p_allocate = 1, 
-                     vill_vacc, ...) {
+                     vill_vacc, type = "empirical", cov_est = 1, perc = 1,...) {
   
   ##' TO DO:
   ##' checks on 'lost vaccinations' at village level
   ##' check to see what assumptions about revaccination and additive campaigns do to cov estimates
-  ##' compare allocation of vacc to see what diff it makes
-
-  vacc_grid <- as.data.table(list(locid = locid, Sdogs = Sdogs, Vdogs = Vdogs, Ndogs = Ndogs, 
-                                  vacc = vill_vacc))
-  vacc_vill <- vacc_grid[, .(Sdogs = sum(Sdogs, na.rm = TRUE), 
-                           Vdogs = sum(Vdogs, na.rm = TRUE),
-                           Ndogs = sum(Ndogs, na.rm = TRUE), 
-                           vacc = first(vacc)), 
-                       by = locid]
-  
-  ##' dogs currently vaccinated that were revaccinated
-  vacc_vill$revacc <- rbinom(nrow(vacc_vill), size = vacc_vill$Vdogs, prob = p_revacc)
+  ##' compare allocation of vacc to see what diff it make
+  ##' 
+  if(type == "sim_cell") {
+    vill_vacc <- rbinom(1, size = 1, prob = perc*vill_vacc) 
+    ## what's the prob that it will get vaccinated at given cov level
+    vacc <- rbinom(length(Ndogs), size = Ndogs, prob = vill_vacc*cov_est) 
+    ## if vaccinated in grid cell, what the cov est abt
     
-  ##' dogs newly vaccinated accounting for revacc(max)
-  ##' if revacc is bigger than # vaccinated total, likely indicates an additive, smaller campaign?
-  vacc_vill$vacc_new <- ifelse(vacc_vill$vacc - vacc_vill$revacc <= 0, 0, 
-                               ## if higher est of cov then vacc_vill$vacc, if mid est, then vacc_vill$vacc*p_revacc
-                               ifelse((vacc_vill$vacc - vacc_vill$revacc) > vacc_vill$Sdogs, 
-                                      vacc_vill$Sdogs, 
-                                      vacc_vill$vacc - vacc_vill$revacc))
-  
-  ##' Get cell level vaccinated (need to do it this way so that susceptibles don't get lost)
-  vacc_grid <- as.data.table(list(locid = locid, sus = Sdogs, p_allocate = p_allocate,
-                                  order_id = 1:length(Sdogs)))
-  vacc_grid <- vacc_grid[vacc_vill, on = "locid"]
-  
-  ##' make sure original order of df is preserved!  
-  vacc_grid <- vacc_grid[order(vacc_grid$order_id), ]   
-  
-  ##' Allocate by available susceptibles at the current time in the village and constrain to 1e-10
-  ##'  so that multinomial will still work
-  ##' basically means that places with more susceptible dogs are more likely to be vaccinated
-  if(length(p_allocate) == 1) {
-    vacc_grid[, vacc_prob := ifelse(Sdogs == 0 , 1e-10, sus/Sdogs)]
-    vacc_grid[, n_vacc := as.double(rmultinom(1, size = first(vacc_new), prob = vacc_prob)), 
-              by = locid]
-  ##' Or allocate by other vaccination probability (this will take longer for sure)
-  } else {
-    vacc_sample <- as.data.table(list(order_id = rep(vacc_grid$order_id, times = vacc_grid$sus)))
-    vacc_sample <- vacc_sample[vacc_grid, on = "order_id"]
-    vaccs <- vacc_sample[, .(order_id = sample(order_id, size = first(vacc_new), 
-                                            replace = FALSE, prob = p_allocate)),
-                         by = "locid"]
-    vaccs <- vaccs[,.(n_vacc = .N), by = "order_id"]
-    vacc_grid <- vacc_grid[vaccs, on = "order_id"]
-    vacc_grid$n_vacc[is.na(vacc_grid$n_vacc)] <- 0
+    revacc <- rbinom(length(Vdogs), size = Vdogs, prob = p_revacc)
+    n_vacc <- ifelse(vacc - revacc <= 0, 0, 
+                     ## if higher est of cov then vacc_vill$vacc, if mid est, then vacc_vill$vacc*p_revacc
+                     ifelse((vacc - revacc) > Sdogs, Sdogs, 
+                            vacc - revacc))
+    
   }
   
-  ##' Set so that newly vaccinated cannot exceed the number sus in that grid cell
-  vacc_grid$n_vacc <- ifelse(vacc_grid$n_vacc > vacc_grid$sus, vacc_grid$sus,
-                             vacc_grid$n_vacc)
-  ##' To do = add as test!
-  ##' Should end up in same order so that (try length(vacc_grid$locid == locid)[FALSE], should = 0)
-  
-  n_vacc <- vacc_grid$n_vacc
+  else {
+    vacc_grid <- as.data.table(list(locid = locid, Sdogs = Sdogs, Vdogs = Vdogs, Ndogs = Ndogs, 
+                                    vacc = vill_vacc))
+    vacc_vill <- vacc_grid[, .(Sdogs = sum(Sdogs, na.rm = TRUE), 
+                             Vdogs = sum(Vdogs, na.rm = TRUE),
+                             Ndogs = sum(Ndogs, na.rm = TRUE), 
+                             vacc = first(vacc)), 
+                         by = locid]
+    
+    ## if working with simulated campaigns (not specifying # of dogs vaccinated)
+    if(type == "sim_vill") {
+      vacc_vill$vacc <- rbinom(1, size = 1, prob = perc*vacc_vill) 
+      vacc_vill[, vacc := rbinom(1, size = Ndogs, prob = vacc*cov_est)]
+    } 
+    
+    ##' dogs currently vaccinated that were revaccinated
+    vacc_vill$revacc <- rbinom(nrow(vacc_vill), size = vacc_vill$Vdogs, prob = p_revacc)
+      
+    ##' dogs newly vaccinated accounting for revacc(max)
+    ##' if revacc is bigger than # vaccinated total, likely indicates an additive, smaller campaign?
+    vacc_vill$vacc_new <- ifelse(vacc_vill$vacc - vacc_vill$revacc <= 0, 0, 
+                                 ## if higher est of cov then vacc_vill$vacc, if mid est, then vacc_vill$vacc*p_revacc
+                                 ifelse((vacc_vill$vacc - vacc_vill$revacc) > vacc_vill$Sdogs, 
+                                        vacc_vill$Sdogs, 
+                                        vacc_vill$vacc - vacc_vill$revacc))
+    
+    ##' Get cell level vaccinated (need to do it this way so that susceptibles don't get lost)
+    vacc_grid <- as.data.table(list(locid = locid, sus = Sdogs, p_allocate = p_allocate,
+                                    order_id = 1:length(Sdogs)))
+    vacc_grid <- vacc_grid[vacc_vill, on = "locid"]
+    
+    ##' make sure original order of df is preserved!  
+    vacc_grid <- vacc_grid[order(vacc_grid$order_id), ]   
+    
+    ##' Allocate by available susceptibles at the current time in the village and constrain to 1e-10
+    ##'  so that multinomial will still work
+    ##' basically means that places with more susceptible dogs are more likely to be vaccinated
+    if(length(p_allocate) == 1) {
+      vacc_grid[, vacc_prob := ifelse(Sdogs == 0 , 1e-10, sus/Sdogs)]
+      vacc_grid[, n_vacc := as.double(rmultinom(1, size = first(vacc_new), prob = vacc_prob)), 
+                by = locid]
+    ##' Or allocate by other vaccination probability (this will take longer for sure)
+    } else {
+      vacc_grid$sus[is.na(vacc_grid$sus)] <- 0
+      vacc_sample <- as.data.table(list(order_id = rep(vacc_grid$order_id, times = vacc_grid$sus)))
+      vacc_sample <- vacc_sample[vacc_grid, on = "order_id"]
+      vaccs <- vacc_sample[, .(order_id = sample(order_id, size = first(vacc_new), 
+                                              replace = FALSE, prob = p_allocate)),
+                           by = "locid"]
+      vaccs <- vaccs[,.(n_vacc = .N), by = "order_id"]
+      vacc_grid <- vaccs[vacc_grid, on = "order_id"]
+      vacc_grid$n_vacc[is.na(vacc_grid$n_vacc)] <- 0
+    }
+    
+    ##' Set so that newly vaccinated cannot exceed the number sus in that grid cell
+    vacc_grid$n_vacc <- ifelse(vacc_grid$n_vacc > vacc_grid$sus, vacc_grid$sus,
+                               vacc_grid$n_vacc)
+    ##' To do = add as test!
+    ##' Should end up in same order so that (try length(vacc_grid$locid == locid)[FALSE], should = 0)
+    
+    n_vacc <- vacc_grid$n_vacc
+  }
   return(n_vacc)
 }
 
