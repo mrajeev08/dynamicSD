@@ -12,7 +12,6 @@
 #' @param locid the location id to match between grid cells and data in 'vill_vacc' 
 #' @param Sdogs number of susceptible dogs in each grid cell at time t
 #' @param Vdogs number of vaccinated dogs in each grid cell at time t
-#' @param Ndogs number of total dogs in each grid cell at time t (includes exposed)
 #' @param p_revacc probability of revaccination of currently vaccinated dogs
 #' @param p_allocate vector of probabilities of vaccination for each grid cell (currently this can either
 #'   be by the proportion of the population in each grid cell at the village level or 
@@ -28,7 +27,7 @@
 #' @section Dependencies:
 #'     Packages: data.table, 
 
-sim.vacc <- function(locid = data$villcode, Sdogs, Ndogs, Vdogs, p_revacc, p_allocate = 1, 
+sim.vacc <- function(locid = data$villcode, Sdogs, Vdogs, p_revacc, p_allocate = 1, 
                      vill_vacc, type = "empirical", cov_est = 1, perc = 1,...) {
   
   ##' TO DO:
@@ -39,7 +38,7 @@ sim.vacc <- function(locid = data$villcode, Sdogs, Ndogs, Vdogs, p_revacc, p_all
   if(type == "sim_cell") {
     vill_vacc <- rbinom(1, size = 1, prob = perc*vill_vacc) 
     ## what's the prob that it will get vaccinated at given cov level
-    vacc <- rbinom(length(Ndogs), size = Ndogs, prob = vill_vacc*cov_est) 
+    vacc <- rbinom(length(Sdogs), size = (Sdogs + Vdogs), prob = vill_vacc*cov_est) 
     ## if vaccinated in grid cell, what the cov est abt
     
     revacc <- rbinom(length(Vdogs), size = Vdogs, prob = p_revacc)
@@ -51,18 +50,17 @@ sim.vacc <- function(locid = data$villcode, Sdogs, Ndogs, Vdogs, p_revacc, p_all
   }
   
   else {
-    vacc_grid <- as.data.table(list(locid = locid, Sdogs = Sdogs, Vdogs = Vdogs, Ndogs = Ndogs, 
+    vacc_grid <- as.data.table(list(locid = locid, Sdogs = Sdogs, Vdogs = Vdogs, 
                                     vacc = vill_vacc))
     vacc_vill <- vacc_grid[, .(Sdogs = sum(Sdogs, na.rm = TRUE), 
                              Vdogs = sum(Vdogs, na.rm = TRUE),
-                             Ndogs = sum(Ndogs, na.rm = TRUE), 
                              vacc = first(vacc)), 
                          by = locid]
     
     ## if working with simulated campaigns (not specifying # of dogs vaccinated)
     if(type == "sim_vill") {
-      vacc_vill$vacc <- rbinom(1, size = 1, prob = perc*vacc_vill) 
-      vacc_vill[, vacc := rbinom(1, size = Ndogs, prob = vacc*cov_est)]
+      vacc_vill$vacc <- rbinom(1, size = 1, prob = perc*vacc_vill$vacc) 
+      vacc_vill[, vacc := rbinom(1, size = (Sdogs + Vdogs), prob = vacc*cov_est)]
     } 
     
     ##' dogs currently vaccinated that were revaccinated

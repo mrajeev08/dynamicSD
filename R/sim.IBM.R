@@ -4,15 +4,17 @@ sim.IBM <- function(grid = as.matrix(SD_raster), data = grid_data, vacc = vacc_m
                     inc_rate = incs, # weekly number of incursions and scaling factor 
                     sigma = get.prob(rate = 7/22.3, step = 1), # weekly rate to prob exp -> inf
                     births = get.prob(rate = 0.44 + (grid_data$growth - 1), step = 52), # annual birth rate to prob
-                    cell_id = grid_data$cell_id,
+                    cell_id = grid_data$cell_id, 
                     mu = get.prob(rate = 0.44, step = 52), # annual death rate to prob 
                     ntimes = tmax, # maximum time step,
                     nu = get.prob(rate = 0.33, step = 52), # annual waning rate to prob,
                     p_revacc = 0.5, # probability of revaccination
+                    p_vacc = 1, # probability of vacc by grid cell
                     dispersalShape = 0.3484, dispersalScale = 41.28/100, # from Rebecca
                     x_topl = bbox(SD_raster)[1, "min"], 
                     y_topl = bbox(SD_raster)[2, "max"], res_m = res(SD_raster)[1], 
-                    return_coords = FALSE,...) {
+                    return_coords = FALSE, vacc_sim = "empirical", cov_val = 1, 
+                    perc_val = 1,...) {
   
   # 1. Set-up and tstep 1 -----------------------------------------------------------------------
   nlocs = nrow(data)
@@ -76,27 +78,28 @@ sim.IBM <- function(grid = as.matrix(SD_raster), data = grid_data, vacc = vacc_m
     # print(paste(t, "/", tmax, "weeks"))
     
     # 3a. Simulate vaccination ---------------------------------------------------------------------
+    ## V transitions, sequetially for competing probs (-waning, - deaths)
+    V[, t] <- V[, t-1] - rbinom(nlocs, size = V[, t - 1], prob = mu) ## die first
+    waning <- rbinom(nlocs, size = V[, t], prob = nu) ## those that don't die then can be lost to waning
+    V[, t] <- V[, t] - waning
+    
+    ## Susceptible transitions die and also adding in waning vaccinated (so can be revacced)
+    S[, t] <- S[, t-1] - rbinom(nlocs, size = S[, t-1], prob = mu)  ## die first
+    ## then add in waning + new borns
+    S[, t] <- S[, t] + + waning + rbinom(nlocs, size = S[, t-1] + V[, t-1], prob = births) 
+    
     ##' Only do it all if vaccinated is greater than 0
     if (t %in% vstep) {
-      n_vacc <- sim.vacc(locid = data$villcode, Sdogs = S[, t-1], Ndogs = N[, t-1], Vdogs = V[, t-1],
-                         vill_vacc = vacc[, t], p_revacc = p_revacc, p_allocate = 1)
+      n_vacc <- sim.vacc(locid = data$villcode, Sdogs = S[, t], Vdogs = V[, t],
+                         vill_vacc = vacc[, t], p_revacc = p_revacc, p_allocate = p_vacc, 
+                         type = vacc_sim, cov_est = cov_val, perc = perc_val)
     } else {
       n_vacc <- 0
     }
     
-    # 3b. Sequential transitions for S + V -----------------------------------------------
-    ## S transitions, sequenctially for competing probs (-vacc, - deaths)
-    S[, t] <- S[, t-1] - n_vacc ## - subtract out newly vaccinated first
-    S[, t] <- S[, t] - rbinom(nlocs, size = S[, t], prob = mu) ## then die
-    
-    ## V transitions, sequetially for competing probs (-waning, - deaths)
-    waning <- rbinom(nlocs, size = V[, t-1], prob = nu)
-    V[, t] <- V[, t-1] - waning
-    V[, t] <- V[, t] - rbinom(nlocs, size = V[, t], prob = mu)
-    
-    ## Additive probs
+    ## balance vaccinated
+    S[, t] <- S[, t] - n_vacc 
     V[, t] <- V[, t] + n_vacc
-    S[, t] <- S[, t] + rbinom(nlocs, size = S[, t-1] + V[, t-1], prob = births) + waning
     
     # 3c. Exposed to infectious --------------------------------------------------------------------
     ## exposed to infectious
