@@ -17,6 +17,7 @@ source("R/data_functions.R")
 source("R/utils.R")
 source("R/sim_functions.R")
 source("R/sim.IBM.R")
+source("R/vacc_functions.R")
 
 ## Data
 vacc_data <- read_csv(paste0("data/", list.files("data/", pattern = "Vaccination")))
@@ -44,44 +45,26 @@ grid_data <- as.data.table(subset(grid_data, !is.na(village_ID) & !is.na(start_p
 ## also subsetting out empty cells...need to think if I NEED to populate these somehow...
 
 ## Need for time step functions within data cleaning
-y1 <- 2002
-ylast <- 2015
-steps <- 52
-tmax <- (ylast - y1) * steps
-start_date <- "01-01-2002"
+tmax <- 20 * 52
 
 ## Get vacc campaigns at vill level
-campaigns <- get.campaigns.WM(vacc = vacc_data, pop = pop_data, shape = SD_shape, threshold = 7)
-campaigns$week <- get.consec(campaigns$date_med, format_date = "%Y-%m-%d", start = "01-01-2002", 
-                             format_start = "%d-%m-%Y", year1 = 2002, tstep = "week", get.info = FALSE)
-# 
-# campaigns %>%
-#   group_by(villcode) %>%
-#   arrange(week) %>%
-#   mutate(weeks_between = week - lag(week)) -> check
+vacc_mat <- sim.campaigns(data = grid_data, vills = unique(grid_data$villcode),
+                          sim_years = 15, burn_in_years = 5, 
+                          vill_weeks = sample(1:75, 75, replace = TRUE))
   
-ts <- as.data.frame(1:tmax) 
-names(ts) <- "week"
-ts %>% 
-  left_join(campaigns) %>%
-  dplyr::select(week, total, villcode) %>%
-  spread(week, total, fill = 0) %>%
-  filter(!is.na(villcode)) -> vacc_mat
-vacc_mat <- as.data.table(list(villcode = grid_data$villcode, 
-                               cell_id = grid_data$cell_id))[vacc_mat, on = "villcode"]
-vacc_mat <- vacc_mat[order(match(vacc_mat$cell_id, grid_data$cell_id)), ] 
-vacc_mat <- as.matrix(vacc_mat[, c("cell_id","villcode"):=NULL]) ## getting rid of id cols
-
 ## rep incursions (so as to include scaling factor)
 iota = 1; scale_iota = 1;
 incs <- ifelse(length(scale_iota) > 1, iota*scale_iota, rep(iota, length(tmax)))
 
-## Sim IBM
-rabies_ts <- read.csv("data/cases.csv")
+check <- sim.IBM(R_0 = 1.1, k = 0.5, inc_rate = 1, p_revacc = 1, 
+                 p_vacc = 1, start_vacc = 0, perc_val = 0.50,
+                 vacc_sim = "sim_cell", cov_val = 1,
+                 return_coords = TRUE)
 
-system.time({
-  check <- sim.IBM(R_0 = 1.1, k = 0.5, inc_rate = 1, p_revacc = 0.5, start_vacc = 0.2, return_coords = FALSE)
-})
+## Get number of cases seeded by a local case in last half of sim period
+I_coords <- check[["I_coords"]]
+I_coords$second_progen <- I_coords$progen_ID[match(I_coords$progen_ID, I_coords$ID)]
+nrow(I_coords %>% filter(second_progen != 0, !is.na(second_progen), tstep >= tmax - 15*52/2))
 
 sum_times <- function(vector, steps, na.rm=TRUE) {    # 'matrix'
   nv <- length(vector)
@@ -95,15 +78,16 @@ S <- check[["S"]]
 E <- check[["E"]]
 I_all <- check[["I_all"]]
 I_dist <- check[["I_dist"]]
-I_coords <- check[["I_coords"]]
-max(I_coords$secondaries)
-max(table(I_coords$progen_ID[I_coords$progen_ID != 0]))
 
-mIobs <- apply(I_all[,1:(ncol(I_all)-3)], 1 , sum_times, steps = 4)
+mIobs <- apply(I_dist[,1:(ncol(I_dist)-3)], 1 , sum_times, steps = 4)
 plot(rowSums(mIobs, na.rm = TRUE), type = "l")
-lines(rabies_ts$cases, col = "red")
+plot(colSums(I_all), col = "red", type = "l")
 plot(colSums(S)/colSums(N), col = "blue", type = "l", ylim = c(0, 1))
-plot(1 - colSums(S)/colSums(N), col = "blue", type = "l", ylim = c(0, 0.6)) 
+plot(1 - colSums(S)/colSums(N), col = "blue", type = "l", ylim = c(0, 1)) 
+max(1 - colSums(S)/colSums(N))
+mean(1 - colSums(S)/colSums(N))
+
 plot(colSums(N), col = "blue", type = "l")
 
 mNobs <- N[, seq(1, tmax, by = 4)]
+
