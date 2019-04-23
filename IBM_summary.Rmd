@@ -7,6 +7,7 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
 ```
 
 ## Individual based model 
@@ -63,6 +64,19 @@ summary(cars)
 ### Endemic SD
 ### Endemic no-control
 ### Elimination
+
+### Percolation
+
+```{r}
+perc_cell <- read.csv("output/perc_df.csv")
+perc_cell %>%
+  group_by(perc, cov) %>%
+  summarize(chain_length = mean(chain_length), secondaries = mean(secondaries)) -> perc_cell
+ggplot(data = perc_cell, aes(x = cov, y = perc, fill = secondaries)) +
+  geom_tile() +
+  scale_fill_gradient(low = "white", high = "red")
+
+```
 
 ## Estimation using synthetic likelihood
 
