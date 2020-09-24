@@ -12,10 +12,9 @@ sim.campaigns <- function(data = grid_data, vills = unique(grid_data$villcode),
                           sim_years = 10, burn_in_years = 5, 
                           vill_weeks = sample(1:52, 75, replace = TRUE),...) {
   
-  init_week <- sample(1:52, length(vills), replace = TRUE)
-  vacc_mat <- matrix(rpois(length(vills)*sim_years, init_week), nrow = length(vills))
+  vacc_mat <- matrix(rpois(length(vills)*sim_years, vill_weeks), nrow = length(vills))
   vacc_mat[, 2:ncol(vacc_mat)] <- sapply(2:ncol(vacc_mat), 
-                                         function(x) (52*(x - 1) + vacc_mat[,x]))
+                                         function(x) (52*(x - 1) + vacc_mat[, x]))
   
   vacc_weeks <- matrix(1:(sim_years*52), nrow = length(vills), ncol = sim_years*52, byrow = TRUE)
   vaccs <- t(sapply(1:nrow(vacc_weeks), function(x) as.numeric(vacc_weeks[x, ] %in% vacc_mat[x, ])))

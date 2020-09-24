@@ -51,32 +51,222 @@ Incursions happen at some rate *iota*
                          OR pulsed
         by distance from edge?
 
-
-```{r cars}
-summary(cars)
-```
-
 ### Simulation time 
 - largely depends on the # of infecteds in the population (so larger pops + R0s will take a longer time).
 - show relationship between # of cases and sim time...
 
 ## Preliminary simulations
 ### Endemic SD
-### Endemic no-control
-### Elimination
+```{r}
+sims_SD <- read.csv("output/simsSD/Imat_SDvacc.csv")
+sims_SD <- data.table::melt(sims_SD, id.vars = 1, variable.name = "nsim", value.name = "cases")
+rabies_ts <- read.csv("data/cases.csv")
+
+sims_SD %>%
+  group_by(X) %>%
+  summarize(sd = sd(cases, na.rm = TRUE), cases = mean(cases, na.rm = TRUE),
+            upper = cases + sd*1.96, lower = cases - sd*1.96, 
+            lower = ifelse(lower < 0, 0, lower)) -> sims_summed
+set.seed(125)
+ggplot(data = sims_summed, aes(x = X, y = cases)) +
+  geom_line(color = "darkred") +
+  geom_ribbon(aes(ymin = lower, ymax = upper), fill = "red", alpha = 0.5) +
+  geom_line(data = rabies_ts, aes(x = times, y = cases), color = "darkred") + 
+  geom_line(data = filter(sims_SD, nsim == sample(nsim, 2, replace = FALSE)), 
+                          aes(x = X, y = cases, group = nsim), color = "pink",
+            linetype = 2) +
+  ylim(c(0, 200)) +
+  xlab("Months") +
+  ylab("Cases") +
+  labs(title = "With SD vaccination")
+
+sims_SD <- read.csv("output/simsSD/Imat_SDendemic.csv")
+sims_SD <- data.table::melt(sims_SD, id.vars = 1, variable.name = "nsim", value.name = "cases")
+
+sims_SD %>%
+  group_by(X) %>%
+  summarize(sd = sd(cases, na.rm = TRUE), cases = median(cases, na.rm = TRUE),
+            upper = cases + sd*1.96, lower = cases - sd*1.96,
+            lower = ifelse(lower < 0, 0, lower)) -> sims_summed
+set.seed(138)
+ggplot(data = sims_summed, aes(x = X, y = cases)) +
+  geom_line(color = "red") +
+  geom_ribbon(aes(ymin = lower, ymax = upper), fill = "red", alpha = 0.5) +
+  geom_line(data = filter(sims_SD, nsim == sample(nsim, 2, replace = FALSE)), 
+                          aes(x = X, y = cases, group = nsim), color = "pink",
+            linetype = 2) +
+  xlab("Months") +
+  ylab("Cases") +
+  labs(title = "Endemic (no vaccination scenario)")
+
+
+sims_SD <- read.csv("output/simsSD/Nmat_SDendemic.csv")
+sims_SD <- data.table::melt(sims_SD, id.vars = 1, variable.name = "nsim", value.name = "cases")
+
+sims_SD %>%
+  group_by(X) %>%
+  summarize(sd = sd(cases, na.rm = TRUE), cases = median(cases, na.rm = TRUE),
+            upper = cases + sd*1.96, lower = cases - sd*1.96) -> sims_summed
+ggplot(data = sims_summed, aes(x = X, y = cases)) +
+  geom_line(color = "blue") +
+  geom_ribbon(aes(ymin = lower, ymax = upper), fill = "blue", alpha = 0.5) +
+  xlab("Months") +
+  ylab("Dog Population") +
+  labs(title = "Dog population growth w/ endemic incidence")
+
+sims_SD <- read.csv("output/simsSD/Imat_SDelim.csv")
+sims_SD <- data.table::melt(sims_SD, id.vars = 1, variable.name = "nsim", value.name = "cases")
+
+set.seed(126)
+sims_SD %>%
+  group_by(X) %>%
+  summarize(sd = sd(cases, na.rm = TRUE), cases = mean(cases, na.rm = TRUE),
+            upper = cases + sd*1.96, lower = cases - sd*1.96,
+            lower = ifelse(lower < 0, 0, lower)) -> sims_summed
+ggplot(data = sims_summed, aes(x = X, y = cases)) +
+  geom_line(color = "red") +
+  geom_ribbon(aes(ymin = lower, ymax = upper), fill = "red", alpha = 0.5) +
+  xlab("Months") +
+  ylim(c(0, 200)) +
+  labs(title = "Elimination scenario")
+
+## coverage at 70/100
+S_SD <- read.csv("output/simsSD/Smat_SDelim.csv")
+N_SD <- read.csv("output/simsSD/Nmat_SDelim.csv")
+
+S_SD <- data.table::melt(S_SD, id.vars = 1, variable.name = "nsim", value.name = "S")
+N_SD <- data.table::melt(N_SD, id.vars = 1, variable.name = "nsim", value.name = "N")
+S_SD %>%
+  left_join(N_SD) %>%
+  mutate(cov = 1 - S/N) %>%
+  group_by(X) %>%
+  summarize(sd = sd(cov, na.rm = TRUE), cov = mean(cov, na.rm = TRUE),
+            upper = cov + sd*1.96, lower = cov - sd*1.96) -> sims_summed
+ggplot(data = sims_summed, aes(x = X, y = cov)) +
+  geom_line(color = "blue") +
+  geom_ribbon(aes(ymin = lower, ymax = upper), fill = "blue", alpha = 0.5) +
+  xlab("Months") +
+  ylab("Dog Population") +
+  labs(title = "Coverage")
+
+sims_SD <- read.csv("output/simsSD/Imat_SDelim.csv")
+sims_SD <- data.table::melt(sims_SD, id.vars = 1, variable.name = "nsim", value.name = "cases")
+
+set.seed(126)
+sims_SD %>%
+  group_by(X) %>%
+  summarize(sd = sd(cases, na.rm = TRUE), cases = mean(cases, na.rm = TRUE),
+            upper = cases + sd*1.96, lower = cases - sd*1.96,
+            lower = ifelse(lower < 0, 0, lower)) -> sims_summed
+ggplot(data = sims_summed, aes(x = X, y = cases)) +
+  geom_line(color = "red") +
+  geom_ribbon(aes(ymin = lower, ymax = upper), fill = "red", alpha = 0.5) +
+  xlab("Months") +
+  labs(title = "Elimination scenario") 
+
+```
+
 
 ### Percolation
-
 ```{r}
-perc_cell <- read.csv("output/perc_df.csv")
-perc_cell %>%
+perc_vill <- read.csv("output/perc/perc_vill.csv")
+perc_vill %>%
   group_by(perc, cov) %>%
-  summarize(chain_length = mean(chain_length), secondaries = mean(secondaries)) -> perc_cell
-ggplot(data = perc_cell, aes(x = cov, y = perc, fill = secondaries)) +
-  geom_tile() +
+  summarize(chain_length = mean(chain_length), secondaries = mean(secondaries),
+            max_secondaries = min(secondaries)) %>%
+  filter(cov != 0, perc != 0) -> perc_vill
+library(plotly)
+
+perc_vill %>%
+  select(perc, cov, secondaries) %>%
+  spread(perc, secondaries) %>%
+  as.matrix(.) -> perc_mat
+perc_mat <- perc_mat[, -1]
+p <- plot_ly(
+  type = 'contour',
+  z = perc_mat/5,
+  x = seq(0.1, 1.0, by = 0.1),
+  y = seq(0.1, 1.0, by = 0.1),
+  contours = list(coloring = 'heatmap', showlabels = TRUE)
+)  %>%
+  layout(xaxis = list(title = "Coverage"), yaxis = list(title = "Proportion of villages"))
+p
+
+perc_vill %>%
+  select(perc, cov, chain_length) %>%
+  spread(perc, chain_length) %>%
+  as.matrix(.) -> perc_mat
+perc_mat <- perc_mat[, -1]
+p <- plot_ly(
+  type = 'contour',
+  z = perc_mat,
+  x = seq(0.1, 1.0, by = 0.1),
+  y = seq(0.1, 1.0, by = 0.1),
+  contours = list(
+    coloring = 'heatmap', showlabels = TRUE
+  )
+) %>%
+  layout(xaxis = list(title = "Coverage"), yaxis = list(title = "Proportion of villages"))
+p
+
+ggplot(data = perc_vill, aes(x = as.factor(cov), y = secondaries, col = perc)) +
+  geom_point() +
   scale_fill_gradient(low = "white", high = "red")
 
 ```
+
+### Scaling down introductions
+
+```{r}
+perc_vill <- read.csv("output/perc/perc_vill_scaleIntros.csv")
+perc_vill %>%
+  group_by(perc, cov) %>%
+  summarize(chain_length = mean(chain_length), secondaries = mean(secondaries),
+            max_secondaries = min(secondaries)) %>%
+  filter(cov != 0, perc != 0) -> perc_vill
+ggplot(data = perc_vill, aes(x = cov, y = perc, fill = secondaries)) +
+  geom_tile() +
+  scale_fill_gradient(low = "white", high = "red")
+library(plotly)
+
+perc_vill %>%
+  select(perc, cov, secondaries) %>%
+  spread(perc, secondaries) %>%
+  as.matrix(.) -> perc_mat
+perc_mat <- perc_mat[, -1]
+p <- plot_ly(
+  type = 'contour',
+  z = perc_mat/5,
+  x = seq(0.1, 1.0, by = 0.1),
+  y = seq(0.1, 1.0, by = 0.1),
+  contours = list(coloring = 'heatmap', showlabels = TRUE)
+) %>%
+  layout(xaxis = list(title = "Coverage"), yaxis = list(title = "Proportion of villages"))
+p
+
+perc_vill %>%
+  select(perc, cov, chain_length) %>%
+  spread(perc, chain_length) %>%
+  as.matrix(.) -> perc_mat
+perc_mat <- perc_mat[, -1]
+p <- plot_ly(
+  type = 'contour',
+  z = perc_mat,
+  x = seq(0.1, 1.0, by = 0.1),
+  y = seq(0.1, 1.0, by = 0.1),
+  contours = list(
+    coloring = 'heatmap', showlabels = TRUE
+  ) 
+) %>%
+  layout(xaxis = list(title = "Coverage"), yaxis = list(title = "Proportion of villages"))
+p
+
+ggplot(data = perc_vill, aes(x = as.factor(cov), y = secondaries, col = perc)) +
+  geom_point() +
+  scale_fill_gradient(low = "white", high = "red")
+
+```
+
 
 ## Estimation using synthetic likelihood
 
@@ -91,10 +281,4 @@ ggplot(data = perc_cell, aes(x = cov, y = perc, fill = secondaries)) +
 ### Endemic SD
 #### Base
 #### With connectivity candidates
-
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-plot(pressure)
-```
 

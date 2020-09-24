@@ -35,6 +35,7 @@ sim.vacc <- function(locid = data$villcode, Sdogs, Vdogs, p_revacc, p_allocate =
   ##' check to see what assumptions about revaccination and additive campaigns do to cov estimates
   ##' compare allocation of vacc to see what diff it make
   ##' 
+  
   if(type == "sim_cell") {
     vill_vacc <- rbinom(1, size = 1, prob = perc*vill_vacc) 
     ## what's the prob that it will get vaccinated at given cov level
@@ -131,7 +132,7 @@ sim.incursions <- function(incursions, counter, row_ids, cell_ids, tstep,
   counter <- counter + incursions
   I_all <- rep(0, length(cell_ids))
     
-  ## only happen in populated places
+  # only observed in populated places
   I_locs <- sample(row_ids, incursions) 
     
   I_coords_out <- data.table(ID = start_counter:counter, tstep = tstep, 
@@ -267,7 +268,7 @@ sim.trans <- function(E_coords_now, cell_id, row_id, S, N) {
     for(j in 1:nrow(E_trans)){
       if (sus > 0){
         trans <- rbinom(1, size = 1, prob = ifelse(E_trans$N[j] == 0, 0,
-                                                   sus/E_trans$N[j]))
+                                                   E_trans$sus[j]/E_trans$N[j]))
         sus <- sus - trans
         E_coords_now$trans[match(E_trans$ID[j], E_coords_now$ID)] <- trans
       }
@@ -280,4 +281,15 @@ sim.trans <- function(E_coords_now, cell_id, row_id, S, N) {
   return(E_coords_now)
 }
 
+sim.trans.multinom <- function(E_coords_now, cell_id, row_id, S, N) {
+  # tabulate: get # of bites in each cell id
+  # index: get the # of S, E, I, V in each cell id @ that week
+  # if you have more exposed than total dogs, subtract and assign X+state to these
+  # these are excess bites (could consider these redundant, i.e. biting the same individuals that
+  # another dog bit
+  # rmutlinom: assign each of these bites to a state
+  # sample: rep out & assign each of these bites to an individual in e_coords now (trans = 0/1) &
+  #         state = S/E/I/V or SX/EX/IX/VX (redundant exps in the sense that these bitten individuals get bitten again)
+  # TO DO: profile & see what's faster!
+}
 

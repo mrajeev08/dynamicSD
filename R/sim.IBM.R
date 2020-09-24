@@ -1,22 +1,24 @@
 ## You need the 
 sim.IBM <- function(grid = as.matrix(SD_raster), data = grid_data, vacc = vacc_mat,
-                    I_seed = 2, start_vacc = 0.2, R_0 = 1.1, k = 0.2, 
+                    I_seed = 1, start_vacc = 0.2, R_0 = 1.1, k = 0.2, 
                     inc_rate = incs, # weekly number of incursions and scaling factor 
                     sigma = get.prob(rate = 7/22.3, step = 1), # weekly rate to prob exp -> inf
                     births = get.prob(rate = 0.44 + (grid_data$growth - 1), step = 52), # annual birth rate to prob
                     cell_id = grid_data$cell_id, 
                     mu = get.prob(rate = 0.44, step = 52), # annual death rate to prob 
                     ntimes = tmax, # maximum time step,
-                    nu = get.prob(rate = 0.33, step = 52), # annual waning rate to prob,
+                    nu = get.prob(rate = 0.33, step = 52), # annual waning rate to prob
                     p_revacc = 0.5, # probability of revaccination
                     p_vacc = 1, # probability of vacc by grid cell
                     dispersalShape = 0.3484, dispersalScale = 41.28/100, # from Rebecca
                     x_topl = bbox(SD_raster)[1, "min"], 
                     y_topl = bbox(SD_raster)[2, "max"], res_m = res(SD_raster)[1], 
                     return_coords = FALSE, vacc_sim = "empirical", cov_val = 1, 
-                    perc_val = 1,...) {
+                    perc_val = 1, scale_incs = FALSE, pup_vacc = rep(0, tmax),...) {
   
   # 1. Set-up and tstep 1 -----------------------------------------------------------------------
+  
+  
   nlocs = nrow(data)
   row_id <- 1:nlocs
   
@@ -85,9 +87,23 @@ sim.IBM <- function(grid = as.matrix(SD_raster), data = grid_data, vacc = vacc_m
     
     ## Susceptible transitions die and also adding in waning vaccinated (so can be revacced)
     S[, t] <- S[, t-1] - rbinom(nlocs, size = S[, t-1], prob = mu)  ## die first
-    ## then add in waning + new borns
-    S[, t] <- S[, t] + + waning + rbinom(nlocs, size = S[, t-1] + V[, t-1], prob = births) 
+    ## then add in waning
+    S[, t] <- S[, t] + waning 
     
+    ## New borns are vaccinated or not
+    births_S <- rbinom(nlocs, size = S[, t-1] + V[, t-1], prob = births) 
+    
+    if(pup_vacc[t] > 0) {
+      births_V <- rbinom(nlocs, size = births_S, prob = pup_vacc[t])
+      births_S <- births_S - births_V
+      V[, t] <- V[, t] + births_V
+    }
+    
+    ## Plus some immigrants + replacements
+    immigrants <- rbinom(nlocs, size = 1, prob = 0.01)
+    
+    S[, t] <- S[, t] + births_S + immigrants
+  
     ##' Only do it all if vaccinated is greater than 0
     if (t %in% vstep) {
       n_vacc <- sim.vacc(locid = data$villcode, Sdogs = S[, t], Vdogs = V[, t],
@@ -121,7 +137,16 @@ sim.IBM <- function(grid = as.matrix(SD_raster), data = grid_data, vacc = vacc_m
     
     # 3d. Add in incursions --------------------------------------------------------------------
     ## incursions (To do? : could add in option to weight by distance from edge)
-    incursions <- rpois(1, inc_rate) # number of incursions in week
+    if(length(inc_rate) > 1) {
+      incursions <- rpois(1, inc_rate[t]) # number of incursions in week
+    } else {
+      incursions <- rpois(1, inc_rate)
+    }
+    
+    ## scale down incursions with vacc coverage
+    if (scale_incs == TRUE) {
+      incursions <- rpois(1, inc_rate*(sum(S[, t-1], na.rm = TRUE)/sum(N[, t-1], na.rm = TRUE))) 
+    } 
     
     if (incursions > 0){
       incs <- sim.incursions(incursions = incursions, counter = counter, row_ids = rows_pop, 
@@ -157,7 +182,7 @@ sim.IBM <- function(grid = as.matrix(SD_raster), data = grid_data, vacc = vacc_m
           E_coords_now <- sim.trans(E_coords_now, cell_id = cell_id, row_id = row_id, S = S[, t],
                                     N = N[, t])
           if (nrow(E_coords_now) > 0) {
-            E_count <- E_coords_now[, list(count = length(ID)), by = cell_id]
+            E_count <- E_coords_now[, list(count = length(ID)), by = cell_id] # replace with tabulate!
             E_new[row_id[match(E_count$cell_id, cell_id)]] <- E_count$count ## add in newly exposed
             ## Using rbindlist to speed up 
             E_coords <- rbindlist(list(E_coords, E_coords_now), fill = TRUE, use.names = TRUE)

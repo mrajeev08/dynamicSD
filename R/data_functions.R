@@ -73,7 +73,7 @@ get.demdata <- function(shapefile, res_meters = 1000, pop = pop_data, census = c
     rast_attributes <- SD_raster@data@attributes[[1]]
     shapefile$ID_match <-rast_attributes$ID[match(shapefile$villcode, rast_attributes$villcode)]
     
-    ## 3. Get proportion of dogs in each cell (from census)
+    ## 3a. Get proportion of dogs in each cell (from census)
     census_dogs <- rasterize(cbind(census$X, census$Y), r,
                              field = census$dogs + census$pups, fun = sum)
     summarize_dogs <- as.data.frame(cbind(census_dogs@data@values, SD_raster@data@values))
@@ -83,7 +83,17 @@ get.demdata <- function(shapefile, res_meters = 1000, pop = pop_data, census = c
       right_join(shapefile@data, by = c("village_ID" = "ID_match")) -> shapefile@data
     raster_pop <- rasterize(shapefile, r, field = shapefile$dogs_total)
     prop <- census_dogs/raster_pop
-  
+    
+    ## 3b.And also dogs vaccinated
+    census_vacc <- rasterize(cbind(census$X, census$Y), r,
+                             field = census$vacc_dogs + census$vacc_pups, fun = sum)
+    cov <- census_vacc/census_dogs
+    ##' add small prob so that allocates equally if vaccinations happen in place where
+    ##' no coverage reported in census and can be allocated equally when 'leftovers'
+    cov[cov > 1] <- 1 ## max of 1 
+    cov[is.na(cov) | cov == Inf] <- 0
+    cov <- cov + 1e-5 
+    
     ## 4. Get HDR and starting dog population from starting vill population
     census_humans <- rasterize(cbind(census$X, census$Y), r,
                                field = census$Adults + census$Children, fun = sum)
@@ -99,9 +109,10 @@ get.demdata <- function(shapefile, res_meters = 1000, pop = pop_data, census = c
     start_pop <- rasterize(shapefile, r, field = shapefile$start_pop) ## just the starting vill pops
     
     ## 5. Return stacked raster file
-    dat <- as_tibble(cbind(SD_raster@data@values, HDR@data@values, growth@data@values, 
-                               prop@data@values, start_pop@data@values))
-    colnames(dat) <- c("village_ID", "HDR", "growth", "prop_pop", "start_pop")
+    dat <- as.data.table(list(village_ID = SD_raster@data@values, 
+                              HDR = HDR@data@values, growth = growth@data@values, 
+                              prop_pop = prop@data@values, start_pop = start_pop@data@values, 
+                              cov = cov@data@values))
     dat$start_pop <- rbinom(nrow(dat), size = round(dat$start_pop), prob = dat$prop_pop)
     dat$villcode <- rast_attributes$villcode[match(dat$village_ID, rast_attributes$ID)]
     dat$cell_id <- 1:nrow(dat) ## in order to use identity of cell!
