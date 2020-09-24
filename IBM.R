@@ -1,7 +1,8 @@
 ### Functions for running most pared down IBM possible
 ## Malavika Rajeev
 ## December 2018
-rm(list = ls())
+
+# Setting up to run in parallel
 library(doMPI)
 cl <- startMPIcluster()
 clusterSize(cl) # this just tells you how many you've got
@@ -32,7 +33,7 @@ pop_data <- read.csv("data/SerengetiPop.csv")
 
 ## Get raster data
 r <- raster(SD_shape)
-res(r) <- 1000
+res(r) <- 1000 # 1 x 1km 
 SD_raster <- rasterize(SD_shape, r)
 
 ## Data by cellID
@@ -99,7 +100,7 @@ scale_iota <- scale_iota$relative.number
 iota = 1; 
 scale_iota = c(rep(scale_iota, each = 4), 
                rep(scale_iota[length(scale_iota)], 4));
-nsim <- 1000
+nsim <- 10
 dir_name <- paste0("output/simsSD")
 
 if (!dir.exists(dir_name)) {
@@ -197,7 +198,7 @@ check <- sim.IBM(R_0 = 1.1, k = 0.5, inc_rate = 1, p_revacc = 1, I_seed = 1,
 N <- check[["N"]] 
 S <- check[["S"]]
 cov_mat <- 1 - S/N
-sims_SD <- data.table::melt(cov_mat, variable.name = "loc", value.name = "cov")
+sims_SD <- data.table::melt(as.data.table(cov_mat), variable.name = "loc", value.name = "cov")
 ggplot(data = sims_SD, aes(x = cov)) +
   geom_histogram(binwidth = 0.1, color = "white", fill = "grey") +
   xlab("Coverage") +
