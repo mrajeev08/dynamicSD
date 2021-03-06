@@ -5,3 +5,5 @@
 data
 figs
 dynamics_SD.Rproj
+*.Rapp.history
+R/archive
