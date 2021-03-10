@@ -7,3 +7,12 @@ figs
 dynamics_SD.Rproj
 *.Rapp.history
 R/archive
+data-raw/*
+!data-raw/process_data.R
+
+# ignore package files for now (add later if packaging)
+NAMESPACE
+DESCRIPTION
+.Rbuildignore
+man
+R/utils-data-table.R

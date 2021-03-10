@@ -16,30 +16,14 @@ source("R/utils-data.R")
 
 # Data -------------------------------------
 
-# shapefile
-sd_shape <-
-  st_read("data-raw/raw/SD_shape/SD_From_HHS/SD_Villages_2002_From_HHS_250m_Smoothed_UTM.shp")
-sd_shape <- st_transform(sd_shape, crs = CRS("+init=epsg:32736"))
-
+# load in shapefile & other data
+sd_shapefile <- st_read(system.file("extdata/sd_shapefile.shp", 
+                                    package = "simrabid"))
 # district wide census (@ vill level)
-sd_pops <- read_csv("data-raw/raw/SerengetiPop.csv")
-sd_census <- read_csv(get_latest("data-raw/raw/wisemonkey", "Census"))
-case_dt <- read_csv(get_latest("data-raw/raw/wisemonkey", "Animal_Contact_Tracing"))
-vacc_dt <- read_csv(get_latest("data-raw/raw/wisemonkey", "Vaccination"))
-
-# Get populations by village (growth & hdr) ----
-sd_pops %>%
-  clean_names() %>%
-  group_by(village_2002) %>%
-  summarize(pop_2002 = sum(population_2002, na.rm = TRUE),
-            pop_2012 = sum(population_2012, na.rm = TRUE),
-            villcode = as.character(villcodes[1])) %>%
-  mutate(growth = exp(log(pop_2012/pop_2002)/10),
-         row_id = row_number()) %>%
-  left_join(clean_names(sd_shape), .,
-            by = c("vill_2002" = "village_2002")) -> sd_shapefile
-
-usethis::use_data(sd_shapefile, overwrite = TRUE)
+sd_census <- read_csv(get_latest("data-raw/wisemonkey", "Census"))
+case_dt <- read_csv(get_latest("data-raw/wisemonkey", "Animal_Contact_Tracing"))
+vacc_dt <- read_csv(get_latest("data-raw/wisemonkey", "Vaccination"))
+inc_dt <- read_csv("data-raw/incursions.csv")
 
 # Clean census data and out neccessary bits -----
 sd_census %>%
@@ -92,20 +76,11 @@ sd_vacc_data %<>%
 
 usethis::use_data(sd_vacc_data, overwrite = TRUE)
 
-# Parameterization defaults (per Mancy et al. 2021) -----
-disp <- read.csv("data-raw/raw/parameters_KH/DK_params.csv")
-steps <- read.csv("data-raw/raw/parameters_KH/steps.distribution.csv")
-serial <- read.csv("data-raw/raw/parameters_KH/SI_params.csv")
-
-param_defaults <-
-  list(
-    steps_shape = steps$shape, steps_scale = steps$scale,
-    disp_meanlog = disp$DK_meanlog, disp_sdlog = disp$DK_sdlog,
-    serial_meanlog = serial$SI_ml, serial_sdlog = serial$SI_sdlog,
-    detect_alpha = 80.1, detect_beta = 8.9,
-    detect_prob = 0.9
-  )
-
-
-usethis::use_data(param_defaults, overwrite = TRUE)
-
+# incursions -----
+inc_dt %>%
+  clean_names() %>%
+  filter(incursions == TRUE) %>%
+  select(id, date = d_symptoms) %>%
+  left_join(select(clean_names(case_dt), id, x_coord = utm_easting, 
+                   y_coord = utm_northing)) -> incursions
+usethis::use_data(incursions, overwrite = TRUE)

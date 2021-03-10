@@ -9,6 +9,7 @@ get_timestep <- function(date, origin_date = "01-01-2002",
 
 # getting cellid of raster based on utm coords
 # so as not have to match names!
+#' @importFrom  data.table .
 get_ids <- function(x_coord, y_coord, rast, id_col) {
 
   cell_id <- cellFromXY(rast, cbind(x_coord, y_coord))
@@ -97,3 +98,4 @@ match_nearest <- function(cell_ids, to_match, max_adjacent = 10) {
 get_latest <- function(path, pattern) {
   list.files(path, full.names = TRUE)[grep(pattern, list.files(path))][1]
 }
+
