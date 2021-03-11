@@ -1,6 +1,6 @@
 # Candidate models (to benchmark) ---------
 
-# sub_cmd:=-t 1 -n 25 -jn times -wt 2m -md 'gdal'
+# sub_cmd:=-t 2 -n 21 -jn times -wt 5m -md 'gdal'
 
 # Set up on cluster ------
 source("R/utils.R")
@@ -42,7 +42,7 @@ vacc_dt <- get_sd_vacc(sd_vacc_data, sd_shapefile, origin_date = "01-Jan-2002",
 # Baseline parameters
 pars <- data.frame(track = FALSE,
                    start_vacc = 0.2,
-                   break_threshold = 0.85,
+                   break_threshold = 0.9,
                    I_seeds = 0, 
                    death_rate = 0.48, 
                    nyears = 2020 - 2002, 
@@ -100,7 +100,8 @@ incursions %<>%
 param_defaults <- c(param_defaults, list(cell_ids = incursions$cell_id, 
                                          tstep = incursions$tstep))
 
-out_times <- foreach(i = iter(cand, by = "row"), .combine = rbind) %do% {
+out_times <- foreach(i = iter(cand, by = "row"), 
+                     .combine = rbind) %do% {
   
   if(i$by_admin) {
     start_up <- start_up_vill
@@ -126,13 +127,13 @@ out_times <- foreach(i = iter(cand, by = "row"), .combine = rbind) %do% {
   inc_fn <- ifelse(i$estincs, simrabid::sim_incursions_pois, simrabid::sim_incursions_hardwired)
   move_fn <- ifelse(i$weights, simrabid::sim_movement_prob, simrabid::sim_movement_continuous)
   
-  nsims <- 1000
+  nsims <- 250
   
   R0_vals <- priors$R0(nsims)
   k_vals <- priors$k(nsims)
-  iota <- ifelse(i$estincs, priors$iota(nsims), NA)
+  iota_vals <-priors$iota(nsims)
   
-  foreach(j = seq_len(nsims), .combine = 'rbind', 
+  foreach(j = seq_len(nsims), .combine = rbind, 
           .packages = c("simrabid", "dplyr", "data.table", "sf", "raster", 
                         "magrittr")) %dopar% {
                           
@@ -153,7 +154,7 @@ out_times <- foreach(i = iter(cand, by = "row"), .combine = rbind) %do% {
                                   sequential = i$sequential, 
                                   allow_invalid = i$allow_invalid,
                                   leave_bounds = i$leave_bounds, 
-                                  max_tries = 100,
+                                  max_tries = 10,
                                   summary_fun = test_sim, # use inc_stats after testing!
                                   track = i$track,
                                   weights = weights, 
@@ -161,8 +162,9 @@ out_times <- foreach(i = iter(cand, by = "row"), .combine = rbind) %do% {
                                   coverage = FALSE,
                                   break_threshold = i$break_threshold,
                                   by_admin = i$by_admin))
-    c(i, time_est = simtm["elapsed"], R0 = R0_vals[j], k = k_vals[j], 
-      iota = iota_vals[j])
+    data.table(i, time_est = simtm["elapsed"], 
+               R0 = R0_vals[j], k = k_vals[j], 
+               iota = ifelse(i$estincs, iota_vals[j], 0))
   }
   
 }
@@ -170,7 +172,7 @@ out_times <- foreach(i = iter(cand, by = "row"), .combine = rbind) %do% {
 # Output results -----
 write_create(out_times,
              fp("analysis/out/test/benchmarks.csv"),
-             write.csv, row.names = FALSE)
+             fwrite, row.names = FALSE)
 
 # Parse these from subutil for where to put things
 syncto <- "~/Documents/Projects/dynamicSD/analysis/out/"

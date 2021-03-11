@@ -9,7 +9,7 @@ dynamics_SD.Rproj
 R/archive
 data-raw/*
 !data-raw/process_data.R
-
+analysis/slurm
 # ignore package files for now (add later if packaging)
 NAMESPACE
 DESCRIPTION
