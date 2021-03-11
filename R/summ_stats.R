@@ -29,53 +29,49 @@ inc_stats <- function(names = c("I_dt", "ncells", "tmax", "extra_pars",
   # filter I_dt to successful transmission events & detected cases
   I_dt <- I_dt[infected & detected]
   
-  if(nrow(I_dt) > 0) {
     
-    # aggregate cols by timestep
-    ncols_sum <- floor(30.5 / days_in_step)
-    
-    # Summarize monthly cases
-    I_ts <- tabulate(floor(I_dt$t_infectious), tmax)
-    I_ts <- sum_to_month(I_total, nc = ncols_sum)
-    
-    # return stats on the time series (should not have NAs)
-    max_I <- max(I_ts)
-    median_I <- median(I_ts)
-    mean_I <- mean(I_ts)
-    
-    # temporal corr
-    acfs <- as.vector(acf(I_ts, lag.max = 10, plot = FALSE)$acf)[-1]
-    names(acfs) <- paste0("acf_lag", 1:10)
-    
-    # spatial corr
-    normalized <- mean(dist(cbind(I_dt$x_coord, I_dt$y_coord)))
-    mean_dist_4wks <- get_mean_dist(t_dt = I_dt[, .(tstep, x_coord, y_coord)],
-                                    t_window = 8, samp_max = 1e4)
-    mean_dist_4wks_norm <- mean_dist/normalized
-    mean_dist_8wks <- get_mean_dist(t_dt = I_dt[, .(tstep, x_coord, y_coord)],
-                                    t_window = 8, samp_max = 1e4)
-    mean_dist_8wks_norm <- mean_dist/normalized
-    
-    # temporal loss
-    temp_rmse <- sqrt(mean((I_ts - data$cases_by_month)^2))
-    temp_ss <- sum((I_ts - data$cases_by_month)^2)
-    
-    # spatial loss
-    I_cell <- tabulate(I_dt$cell_id, ncells)
-    spat_rmse <- sqrt(mean((I_cell - data$cases_by_cell)^2))
-    spat_ss <- sum((I_cell - data$cases_by_cell)^2)
-    spat_loss <- mean(abs(I_cell - data$cases_by_cell))
-    
-    # ks discrete statistic
-    inc_hist <- hist(I_ts, breaks = data$breaks)$count
-    ks_stat <- max(abs(inc_hist - data$inc_hist))
-    hist_ss <- sum((I_cell/sum(I_cell) - data$cases_by_cell/sum(data$cases_by_cell))^2)
-    hist_rmse <- sqrt(mean((I_cell/sum(I_cell$N) - data$cases_by_cell/sum(data$cases_by_cell))^2))
-    
-    
-  }
+  # aggregate cols by timestep
+  ncols_sum <- floor(30.5 / days_in_step)
   
-
+  # Summarize monthly cases
+  I_ts <- tabulate(floor(I_dt$t_infectious), tmax)
+  I_ts <- sum_to_month(I_total, nc = ncols_sum)
+  
+  # return stats on the time series (should not have NAs)
+  max_I <- max(I_ts)
+  median_I <- median(I_ts)
+  mean_I <- mean(I_ts)
+  
+  # temporal corr
+  acfs <- as.vector(acf(I_ts, lag.max = 10, plot = FALSE)$acf)[-1]
+  names(acfs) <- paste0("acf_lag", 1:10)
+  
+  # spatial corr
+  normalized <- mean(dist(cbind(I_dt$x_coord, I_dt$y_coord)))
+  mean_dist_4wks <- get_mean_dist(t_dt = I_dt[, .(tstep, x_coord, y_coord)],
+                                  t_window = 8, samp_max = 1e4)
+  mean_dist_4wks_norm <- mean_dist/normalized
+  mean_dist_8wks <- get_mean_dist(t_dt = I_dt[, .(tstep, x_coord, y_coord)],
+                                  t_window = 8, samp_max = 1e4)
+  mean_dist_8wks_norm <- mean_dist/normalized
+  
+  # temporal loss
+  temp_rmse <- sqrt(mean((I_ts - data$cases_by_month)^2))
+  temp_ss <- sum((I_ts - data$cases_by_month)^2)
+  
+  # spatial loss
+  I_cell <- tabulate(I_dt$cell_id, ncells)
+  spat_rmse <- sqrt(mean((I_cell - data$cases_by_cell)^2))
+  spat_ss <- sum((I_cell - data$cases_by_cell)^2)
+  spat_loss <- mean(abs(I_cell - data$cases_by_cell))
+  
+  # ks discrete statistic
+  inc_hist <- hist(I_ts, breaks = data$breaks)$count
+  ks_stat <- max(abs(inc_hist - data$inc_hist))
+  hist_ss <- sum((I_cell/sum(I_cell) - data$cases_by_cell/sum(data$cases_by_cell))^2)
+  hist_rmse <- sqrt(mean((I_cell/sum(I_cell) - data$cases_by_cell/sum(data$cases_by_cell))^2))
+  
+  
   return(c(list(max_I = max_I, median_I = median_I, mean_I = mean_I,
                 ks_stat = ks_stat,
                 hist_ss = hist_ss, hist_rmse = hist_rmse,
