@@ -10,6 +10,10 @@ R/archive
 data-raw/*
 !data-raw/process_data.R
 analysis/slurm
+
+# wait until end to track output files
+analysis/out 
+
 # ignore package files for now (add later if packaging)
 NAMESPACE
 DESCRIPTION

@@ -10,10 +10,10 @@ inc_stats <- function(names = c("I_dt", "ncells", "tmax", "extra_pars",
   I_dt <- I_dt[infected & detected]
   
   # aggregate cols by timestep (dates!)
-  I_dt[, date := as_date(ymd(start_date) + duration(t_infectious, "weeks"))]
+  I_dt[, date := lubridate::as_date(lubridate::ymd(start_date) + lubridate::duration(t_infectious, "weeks"))]
   I_dt[, ts_agg := get_timestep(date, 
                                 origin_date = start_date,
-                                date_fun = ymd,
+                                date_fun = lubridate::ymd,
                                 units = 'months')]
   
   # Summarize monthly cases

@@ -1,8 +1,8 @@
 # Candidate models (to benchmark) ---------
 
-# sub_cmd:=-t 1 -n 21 -jn fit -wt 1m -sp analysis/scripts/fit.R -md 'gdal' -ar '1-2'
+# sub_cmd:=-t 1 -n 21 -jn fit -wt 1m -md 'gdal' -ar '1-4' -cmd '100'
 
-ind <- commandArgs(trailingOnly = TRUE)
+arg <- commandArgs(trailingOnly = TRUE)
 
 # Set up on cluster ------
 source("R/utils.R")
@@ -28,9 +28,9 @@ library(doRNG)
 library(lubridate)
 
 # set up args
-mod_ind <- as.numeric(ind[1])
+mod_ind <- as.numeric(arg[1])
 cand <- fread(fp("analysis/out/fit/candidates.csv"))[mod_ind, ]
-nsims <- 1e3
+nsims <- as.numeric(arg[2])
 
 # load in shapefile & other data
 sd_shapefile <- st_read(system.file("extdata/sd_shapefile.shp", 
@@ -50,7 +50,10 @@ source("R/summ_stats.R")
 vacc_dt <- get_sd_vacc(sd_vacc_data, sd_shapefile, origin_date = "01-Jan-2002",
                        date_fun = lubridate::dmy, units = "weeks", rollup = 4)
 
-# Get the startup
+# Get the startup (wrap everything below this in a function)
+# pass cand & summary stats & list of param values (this is where it's tricky)
+# maybe check against default params? if not there then pull from 
+# list that gets passed (should either be length 1 or length nsims)
 out <- get_sd_pops(sd_shapefile, res_m = 1000,
                    sd_census_data, death_rate_annual = cand$death_rate)
 
@@ -122,7 +125,7 @@ out_sims <-
                       "data.table", "sf", "raster", 
                       "magrittr"), 
         .options.RNG = cand$seed) %dorng% {
-       
+      
         out <- 
           tryCatch(
             expr = {
@@ -174,9 +177,10 @@ out_sims <-
 
 file_out <- paste0("analysis/out/fit/", get_name(cand), ".csv")
 
+
 write_create(out_sims,
              fp(file_out),
-             fwrite)
+             data.table::fwrite)
 
 
 # Parse these from subutil for where to put things

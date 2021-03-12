@@ -9,6 +9,7 @@ set_up <- setup_cl(mpi = TRUE)
 library(data.table)
 library(tidyr)
 library(dplyr)
+library(magrittr)
 
 # List of candidate models to output ---------
 # Baseline parameters
