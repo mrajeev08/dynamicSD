@@ -41,6 +41,9 @@ cand <- cbind(cand, pars)
 set.seed(123)
 cand$seed <- sample(1e4, size = nrow(cand), replace = FALSE)
 
+# for testing
+cand <- filter(cand, sequential == TRUE, weights == FALSE, partition == 1)
+
 # Output results -----
 write_create(cand,
              here::here("analysis/out/fit/candidates.csv"),

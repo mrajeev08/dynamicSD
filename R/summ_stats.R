@@ -1,42 +1,24 @@
-# Summary stat functions
-# To try
-# max # of cases
-# mean # of cases
-# median # of cases
-# pop growth overall (at district scale) (so that its okay if timed out)
-# acf (1 - 10)
-# mean distance between cases at 1 month (Rcpp)
-# this mean normalized by mean overall (Rcpp)
-# spatial loss function (mismatch between where cases are?)
-# ks test statistic for frequency of case counts per month (temporal bit) (so that its okay if timed out)
-
-
-# I_dt <- data.table(tstep = runif(1e4, 0, 4*24),
-#                    x_coord = runif(1e4, 0, 1),
-#                    y_coord = runif(1e4, 0, 1))
-#
-
-# Incidence stats
-# data = inc_hist + breaks (which should be 1 longer than length of inc_hist)
-# data = # of cases per cell (order by the cell_id)
-# do this with example of different sizes & benchmark
 inc_stats <- function(names = c("I_dt", "ncells", "tmax", "extra_pars", 
-                                "days_in_step")) {
+                                "days_in_step"), 
+                      start_date = "2002-01-01") {
 
   # Get the objects you need from the environment above this one
   list2env(use_mget(names, envir_num = 2), envir = environment())
-
+  obs_data <- extra_pars$obs_data
+  
   # filter I_dt to successful transmission events & detected cases
   I_dt <- I_dt[infected & detected]
   
-    
-  # aggregate cols by timestep
-  ncols_sum <- floor(30.5 / days_in_step)
+  # aggregate cols by timestep (dates!)
+  I_dt[, date := as_date(ymd(start_date) + duration(t_infectious, "weeks"))]
+  I_dt[, ts_agg := get_timestep(date, 
+                                origin_date = start_date,
+                                date_fun = ymd,
+                                units = 'months')]
   
   # Summarize monthly cases
-  I_ts <- tabulate(floor(I_dt$t_infectious), tmax)
-  I_ts <- sum_to_month(I_total, nc = ncols_sum)
-  
+  I_ts <- tabulate(floor(I_dt$ts_agg), length(obs_data$cases_by_month))
+
   # return stats on the time series (should not have NAs)
   max_I <- max(I_ts)
   median_I <- median(I_ts)
@@ -47,150 +29,74 @@ inc_stats <- function(names = c("I_dt", "ncells", "tmax", "extra_pars",
   names(acfs) <- paste0("acf_lag", 1:10)
   
   # spatial corr
-  normalized <- mean(dist(cbind(I_dt$x_coord, I_dt$y_coord)))
-  mean_dist_4wks <- get_mean_dist(t_dt = I_dt[, .(tstep, x_coord, y_coord)],
+  I_dt <- I_dt[!is.na(x_coord) | !is.na(y_coord)]
+  mean_dist_all <- mean(dist(cbind(I_dt$x_coord, I_dt$y_coord)))
+  mean_dist_4wks <- get_mean_dist(t_dt = I_dt[, .(t_infectious, x_coord, y_coord)],
+                                  t_window = 4, samp_max = 1e4)
+  mean_dist_4wks_norm <- mean_dist_4wks/mean_dist_all
+  mean_dist_8wks <- get_mean_dist(t_dt = I_dt[, .(t_infectious, x_coord, y_coord)],
                                   t_window = 8, samp_max = 1e4)
-  mean_dist_4wks_norm <- mean_dist/normalized
-  mean_dist_8wks <- get_mean_dist(t_dt = I_dt[, .(tstep, x_coord, y_coord)],
-                                  t_window = 8, samp_max = 1e4)
-  mean_dist_8wks_norm <- mean_dist/normalized
+  mean_dist_8wks_norm <- mean_dist_8wks/mean_dist_all
   
   # temporal loss
-  temp_rmse <- sqrt(mean((I_ts - data$cases_by_month)^2))
-  temp_ss <- sum((I_ts - data$cases_by_month)^2)
+  temp_rmse <- sqrt(mean((I_ts - obs_data$cases_by_month)^2))
+  temp_loss <- mean(abs(I_ts - obs_data$cases_by_month))
   
   # spatial loss
   I_cell <- tabulate(I_dt$cell_id, ncells)
-  spat_rmse <- sqrt(mean((I_cell - data$cases_by_cell)^2))
-  spat_ss <- sum((I_cell - data$cases_by_cell)^2)
-  spat_loss <- mean(abs(I_cell - data$cases_by_cell))
-  
+  spat_rmse <- sqrt(mean((I_cell - obs_data$cases_by_cell)^2))
+  spat_loss <- mean(abs(I_cell - obs_data$cases_by_cell))
+
   # ks discrete statistic
-  inc_hist <- hist(I_ts, breaks = data$breaks)$count
-  ks_stat <- max(abs(inc_hist - data$inc_hist))
-  hist_ss <- sum((I_cell/sum(I_cell) - data$cases_by_cell/sum(data$cases_by_cell))^2)
-  hist_rmse <- sqrt(mean((I_cell/sum(I_cell) - data$cases_by_cell/sum(data$cases_by_cell))^2))
+  breaks <- seq(0, max(c(obs_data$cases_by_month, I_ts)) + 5, by = 5)
+  inc_hist <- hist(I_ts, breaks = breaks, plot = FALSE)$count
+  obs_hist <- hist(obs_data$cases_by_month, breaks, plot = FALSE)$count
+  ks_stat <- max(abs(inc_hist - obs_hist))
+  hist_rmse <- sqrt(mean((inc_hist - obs_hist)^2))
+  hist_loss <- mean(abs(inc_hist - obs_hist))
   
-  
-  return(c(list(max_I = max_I, median_I = median_I, mean_I = mean_I,
-                ks_stat = ks_stat,
-                hist_ss = hist_ss, hist_rmse = hist_rmse,
-                mean_dist_4wks = mean_dist_4wks,
-                mean_dist_8wks = mean_dist_8wks,
-                mean_dist_4wks_norm = mean_dist_4wks_norm,
-                mean_dist_8wks_norm = mean_dist_8wks_norm, 
-                spat_rmse = spat_rmse,
-                spat_ss = spat_ss, 
-                temp_rmse = temp_rmse,
-                temp_ss = temp_ss), as.list(acfs)))
+  # out data.table
+  return(data.table(max_I, median_I, mean_I, ks_stat,hist_rmse,
+                    hist_loss, mean_dist_4wks, mean_dist_8wks, 
+                    mean_dist_4wks_norm, mean_dist_8wks_norm, 
+                    spat_rmse, spat_loss,
+                    temp_rmse, temp_loss, 
+                    mean_dist_all,
+                    t(acfs)))
 
 }
 
 
-# Fast acf
-
-# Mean distance between cases within one month of each other
-# (lag in 1 direction only to avoid mutliple reps?)
-
-# Normalized by mean distance between all cases (dist_mat mean)
-
-# Naive version with coords (beyond 10,000 coords this becomes very slow)
-# tstep <- runif(1e4, 0, 4*24)
-# x_coord <- runif(1e4, 0, 1)
-# y_coord <- runif(1e4, 0, 1)
-# mean_dist_window(x_coord, y_coord, tstep, 4)
-
-mean_dist_window <- function(I_dt, t_window = 4,
-                             normalize = TRUE) {
-
-  mu_dist <- rep(NA, length(x_coord))
-
-  for(i in seq_len(length(x_coord))) {
-
-    diff_t <- tstep[i] - tstep
-
-    # filter to ones with cases in preceding twindow
-    within <- diff_t > 0 & diff_t < t_window
-
-    if(sum(within) > 0 ) {
-      mu_dist[i] <- mean((x_coord[i] - x_coord[within])^2 + (y_coord[i] - y_coord[within])^2)
-    } else {
-      next
-    }
-
-  }
-
-  mean_dist <- mean(mu_dist, na.rm = TRUE)
-
-  if(normalize) {
-    mean_dist <- mean_dist/mean(dist(cbind(x_coord, y_coord)))
-  }
-
-  return(mean_dist)
-
-}
-
-
-mean_dist_dt<- function(I_dt, t_window = 4,
-                             normalize = TRUE) {
-
-  mu_dist <- rep(NA, length(x_coord))
-
-  for(i in seq_len(length(x_coord))) {
-
-    diff_t <- tstep[i] - tstep
-
-    # filter to ones with cases in preceding twindow
-    within <- diff_t > 0 & diff_t < t_window
-
-    if(sum(within) > 0 ) {
-      mu_dist[i] <- mean((x_coord[i] - x_coord[within])^2 + (y_coord[i] - y_coord[within])^2)
-    } else {
-      next
-    }
-
-  }
-
-  mean_dist <- mean(mu_dist, na.rm = TRUE)
-
-  if(normalize) {
-    mean_dist <- mean_dist/mean(dist(cbind(x_coord, y_coord)))
-  }
-
-  return(mean_dist)
-
-}
-
-# Get the x & ycoords for up to N lags & then filter to the diff in times and take the means
-# create a data.table with the tsteps
-# this is the fastest!
-# set it to do max 10k samples
-dist_fun <- function(x_coord, y_coord, x_coord_to, y_coord_to) {
-
- mean(sqrt((x_coord - x_coord_to)^2 + (y_coord - y_coord_to)^2))
-
-}
-
-get_mean_dist <- function(t_dt = I_dt[, .(tstep, x_coord, y_coord)],
+# Get mean distance between cases N week lag before index case
+get_mean_dist <- function(t_dt = I_dt[, .(t_infectious, x_coord, y_coord)],
                           t_window = 4, samp_max = 1e4) {
 
   if(nrow(t_dt) > samp_max) {
     t_dt <- t_dt[sample(.N, samp_max)]
   }
 
-  c_dt <- t_dt[ , .(max = tstep,
-                      min = tstep - 4,
+  c_dt <- t_dt[ , .(max = t_infectious,
+                      min = t_infectious - t_window,
                       x_coord_to = x_coord,
                       y_coord_to = y_coord)]
 
   new <- t_dt[c_dt,
-                    on = .(tstep < max, tstep >= min),
+                    on = .(t_infectious < max, t_infectious >= min),
                     allow.cartesian = TRUE, nomatch = NULL]
 
   return(dist_fun(new$x_coord, new$y_coord, new$x_coord_to, new$y_coord_to))
 
 }
 
+# helper for distance fun
+dist_fun <- function(x_coord, y_coord, x_coord_to, y_coord_to) {
+  
+  mean(sqrt((x_coord - x_coord_to)^2 + (y_coord - y_coord_to)^2))
+  
+}
+
+# Function for benchmarking + testing simulation output
+# Output = 1 row per sim
 test_sim <- function(names = c("I_dt", "S_mat", "N_mat", "tmax", "days_in_step")) {
   
   start <- Sys.time()
