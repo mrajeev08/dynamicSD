@@ -15,18 +15,13 @@ library(magrittr)
 # Baseline parameters
 pars <- data.frame(track = FALSE,
                    start_vacc = 0.2,
-                   break_threshold = 0.9,
+                   break_threshold = 0.95,
                    I_seeds = 0, 
                    death_rate = 0.48, 
                    nyears = 2020 - 2002, 
                    steps = 52, 
                    days_in_step = 7, 
                    leave_bounds = TRUE)
-
-# Set up priors
-priors <- list(R0 = function(n) exp(rnorm(n, mean = 0, sd = 0.2)),
-               iota = function(n) exp(rnorm(n, mean = 0, sd = 1)),
-               k = function(n) exp(rnorm(n, mean = 0, sd = 2)))
 
 # candidate df to write out
 cand <- tidyr::expand_grid(sequential = c(TRUE, FALSE),
@@ -37,13 +32,11 @@ cand <- tidyr::expand_grid(sequential = c(TRUE, FALSE),
 cand %<>% 
   mutate(allow_invalid = case_when(weights == TRUE ~ FALSE, 
                                    weights == FALSE ~ TRUE))
+
 cand <- cbind(cand, pars)
 
-set.seed(123)
+set.seed(124)
 cand$seed <- sample(1e4, size = nrow(cand), replace = FALSE)
-
-# for testing
-cand <- filter(cand, sequential == TRUE, weights == FALSE, partition == 1)
 
 # Output results -----
 write_create(cand,

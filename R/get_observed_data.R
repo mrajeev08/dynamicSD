@@ -22,13 +22,20 @@ get_observed_data <- function(sd_case_data, mod_specs, mod_start) {
   # cases by month & cell
   cases_by_month <- tabulate(sd_case_data$month, nbins = mod_specs$nyears * 12)
   cases_by_cell <- tabulate(sd_case_data$cell_id, nbins = ncell(mod_start$rast))
+  breaks <- seq(0, max(cases_by_month) + 5, by = 5)
+  inc_hist <- hist(cases_by_month, breaks, plot = FALSE)$count
   
   # set-up for input into summ_stats
   ncells <- ncell(mod_start$rast)
   tmax <- mod_specs$nyears * tmult
   extra_pars <- list(obs_data =  list(cases_by_month = cases_by_month,
-                                      cases_by_cell = cases_by_cell))
+                                      cases_by_cell = cases_by_cell, 
+                                      inc_hist = inc_hist, 
+                                      breaks = breaks))
+  t <- tmax
   days_in_step <- mod_specs$days_in_step
+  prop_start_pop <- 7e4/sum(mod_start$start_pop, na.rm = TRUE)
+  break_threshold <- 0
   
   sd_case_data %>%
     dplyr::select(t_infectious, x_coord = utm_easting, y_coord = utm_northing, 

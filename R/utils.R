@@ -277,12 +277,16 @@ setup_cl <- function(slurm = Sys.getenv("SLURM_JOB_ID") != "",
 }
 
 # a little helper function to get names
-get_name <- function(i) {
+get_name <- function(i, root = FALSE) {
   
   seq <- ifelse(i$sequential, "seq", "kern")
   scale <- ifelse(i$by_admin, "vill", "grid1x1")
   est_incs <- ifelse(i$estincs, "estincs", "fixedincs")
   move <- ifelse(i$weights, "moveprob", "movecont")
-  paste(scale, move, est_incs, seq, i$seed, i$partition, sep = "_")
-  
+  root_name <- paste(scale, move, est_incs, seq, sep = "_")
+  if(root) {
+    return(root_name)
+  } else {
+   return(paste(root_name, i$seed, i$partition, sep = "_"))
+  }
 }

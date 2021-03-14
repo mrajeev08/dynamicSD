@@ -108,7 +108,7 @@ move_fn <- ifelse(cand$weights, simrabid::sim_movement_prob, simrabid::sim_movem
 # Set up priors
 priors <- list(R0 = function(n) exp(rnorm(n, mean = 0.1, sd = 0.2)), # centered around 1.1
                iota = function(n) exp(rnorm(n, mean = 0.75, sd = 0.5)), # centered around 1
-               k = function(n) exp(rnorm(1000, mean = 0.1, sd = 1))) # centered around 1
+               k = function(n) runif(n, 0.1, 10)) # uniform
 
 R0_vals <- priors$R0(nsims)
 k_vals <- priors$k(nsims)

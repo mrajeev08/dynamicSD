@@ -1,5 +1,43 @@
+# Time series from simulations
+ts_stats <- function(names = c("I_dt", "ncells", "tmax", 
+                                "days_in_step", "N_mat", "S_mat"), 
+                      start_date = "2002-01-01") {
+  
+  # Get the objects you need from the environment above this one
+  list2env(use_mget(names, envir_num = 2), envir = environment())
+
+  # filter I_dt to successful transmission events & detected cases
+  I_dt <- I_dt[infected == TRUE]
+  
+  # aggregate cols by timestep (dates!)
+  I_dt[, date := lubridate::as_date(lubridate::ymd(start_date) + lubridate::duration(t_infectious, "weeks"))]
+  I_dt[, ts_agg := get_timestep(date, 
+                                origin_date = start_date,
+                                date_fun = lubridate::ymd,
+                                units = 'months')]
+
+  # Summarize monthly cases
+  I_ts <- tabulate(floor(I_dt$ts_agg), length(obs_data$cases_by_month))
+  I_ts_local <- tabulate(floor(I_dt$ts_agg[I_dt$progen_id > 0]), 
+                         length(obs_data$cases_by_month))
+  I_ts_detected <- tabulate(floor(I_dt$ts_agg[I_dt$detected == TRUE]), 
+                            length(obs_data$cases_by_month))
+  
+  # Summarize susceptibles & total population
+  S <- inds_to_month(colSums(S_mat), nc = ncols_sum)
+  N <- inds_to_month(colSums(N_mat), nc = ncols_sum)
+  cov <- S/N
+  
+  
+  # out data.table
+  return(data.table(I_ts, I_ts_local, I_ts_detected))
+  
+}
+
+# Summary stats for abc ----
 inc_stats <- function(names = c("I_dt", "ncells", "tmax", "extra_pars", 
-                                "days_in_step"), 
+                                "days_in_step", "prop_start_pop", 
+                                "break_threshold", "t"), 
                       start_date = "2002-01-01") {
 
   # Get the objects you need from the environment above this one
@@ -18,7 +56,20 @@ inc_stats <- function(names = c("I_dt", "ncells", "tmax", "extra_pars",
   
   # Summarize monthly cases
   I_ts <- tabulate(floor(I_dt$ts_agg), length(obs_data$cases_by_month))
-
+  I_cell <- tabulate(I_dt$cell_id, ncells)
+  
+  # if sim is actually broken then break it some more
+  if(prop_start_pop < break_threshold) {
+    brk_date <- ymd(start_date) + duration(t, "weeks")
+    brk <- get_timestep(date = brk_date, 
+                        origin_date = start_date,
+                        date_fun = lubridate::ymd,
+                        units = 'months')
+    I_ts <- sample(I_ts[1:brk], length(I_ts), replace = TRUE)
+    I_cells_tab <- sample(I_dt$cell_id, sum(I_ts), replace = TRUE)
+    I_cell <- tabulate(I_cells_tab, ncells)
+  }
+  
   # return stats on the time series (should not have NAs)
   max_I <- max(I_ts)
   median_I <- median(I_ts)
@@ -43,18 +94,32 @@ inc_stats <- function(names = c("I_dt", "ncells", "tmax", "extra_pars",
   temp_loss <- mean(abs(I_ts - obs_data$cases_by_month))
   
   # spatial loss
-  I_cell <- tabulate(I_dt$cell_id, ncells)
   spat_rmse <- sqrt(mean((I_cell - obs_data$cases_by_cell)^2))
   spat_loss <- mean(abs(I_cell - obs_data$cases_by_cell))
 
   # ks discrete statistic
-  breaks <- seq(0, max(c(obs_data$cases_by_month, I_ts)) + 5, by = 5)
+  breaks <- seq(0, max(I_ts) + 5, by = 5)
   inc_hist <- hist(I_ts, breaks = breaks, plot = FALSE)$count
-  obs_hist <- hist(obs_data$cases_by_month, breaks, plot = FALSE)$count
-  ks_stat <- max(abs(inc_hist - obs_hist))
-  hist_rmse <- sqrt(mean((inc_hist - obs_hist)^2))
-  hist_loss <- mean(abs(inc_hist - obs_hist))
+  lobs <- length(obs_data$inc_hist)
   
+  if(length(inc_hist) > lobs) {
+    inc_hist <- c(inc_hist[1:lobs], 
+                  sum(inc_hist[(lobs + 1):length(inc_hist)]))
+    obs_data$inc_hist <- c(obs_data$inc_hist, 0)
+  }
+  
+  if(length(inc_hist) < lobs) {
+    inc_hist <- c(inc_hist, rep(0, lobs - length(inc_hist))) 
+  }
+  
+  ks_stat <- max(abs(inc_hist - obs_data$inc_hist))
+  hist_rmse <- sqrt(mean((inc_hist - obs_data$inc_hist)^2))
+  hist_loss <- mean(abs(inc_hist - obs_data$inc_hist))
+  
+  # depletion of population
+  broken <- prop_start_pop < break_threshold
+  pop_decline <- ifelse(prop_start_pop >= 1, 0, 1 - prop_start_pop)
+
   # out data.table
   return(data.table(max_I, median_I, mean_I, ks_stat,hist_rmse,
                     hist_loss, mean_dist_4wks, mean_dist_8wks, 
@@ -62,7 +127,8 @@ inc_stats <- function(names = c("I_dt", "ncells", "tmax", "extra_pars",
                     spat_rmse, spat_loss,
                     temp_rmse, temp_loss, 
                     mean_dist_all,
-                    t(acfs)))
+                    t(acfs), prop_start_pop, 
+                    broken, pop_decline))
 
 }
 
@@ -194,4 +260,5 @@ times_linked <- function(I_dt) {
   
   return(times$ts)
 }
+
 
