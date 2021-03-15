@@ -13,4 +13,4 @@ rsync -rLvzt --update --exclude '*.git' --exclude '.Rproj*' --exclude '*archive*
 
 # Push up the outputs to scratch (so always working from there for outputs)
 # Should already be there 
-rsync -rLvzt --update --exclude "*.DS_Store*" ~/Documents/Projects/dynamicSD/analysis/out mrajeev@della.princeton.edu:/scratch/gpfs/mrajeev/dynamicSD/analysis/
+rsync -rLvzt --update --exclude "*.DS_Store*" --exclude "*archive*" ~/Documents/Projects/dynamicSD/analysis/out mrajeev@della.princeton.edu:/scratch/gpfs/mrajeev/dynamicSD/analysis/

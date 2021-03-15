@@ -57,14 +57,15 @@ vacc_dt <- get_sd_vacc(sd_vacc_data, sd_shapefile, origin_date = "01-Jan-2002",
 out <- get_sd_pops(sd_shapefile, res_m = 1000,
                    sd_census_data, death_rate_annual = cand$death_rate)
 
-start_up <- setup_sim(tmax = cand$steps * (cand$nyears),
+start_up <- setup_sim(start_date = "2002-01-01", 
+                      apprx_end_date = "2020-12-31", 
+                      days_in_step = 7, 
                       rast = out$rast,
                       death_rate_annual = out$death_rate_annual,
                       birth_rate_annual = out$birth_rate_annual,
                       waning_rate_annual = 1/3,
                       block_fun = block_cells,
                       params = list(start_pop = out$start_pop),
-                      step = cand$steps,
                       by_admin = cand$by_admin)
 
 if(!cand$estincs) {
@@ -107,12 +108,10 @@ move_fn <- ifelse(cand$weights, simrabid::sim_movement_prob, simrabid::sim_movem
 
 # Set up priors
 priors <- list(R0 = function(n) exp(rnorm(n, mean = 0.1, sd = 0.2)), # centered around 1.1
-               iota = function(n) exp(rnorm(n, mean = 0.75, sd = 0.5)), # centered around 1
-               k = function(n) runif(n, 0.1, 10)) # uniform
+               iota = function(n) exp(rnorm(n, mean = 0.5, sd = 0.5)), # centered around 1.5
+               k = function(n) exp(rnorm(n, mean = 0.5, sd = 0.5))) # uniform
 
-R0_vals <- priors$R0(nsims)
-k_vals <- priors$k(nsims)
-if(cand$estincs) iota_vals <- priors$iota(nsims) else iota_vals <- rep(0, nsims)
+if(!cand$estincs) priors$k <- function(n) rep(0, n)
 
 # get observed data
 obs_data <- get_observed_data(sd_case_data, 
@@ -125,7 +124,12 @@ out_sims <-
                       "data.table", "sf", "raster", 
                       "magrittr"), 
         .options.RNG = cand$seed) %dorng% {
-      
+        
+       # draw a val 
+       R0_val <- priors$R0(1)
+       k_val <- priors$k(1)
+       iota_val <- priors$iota(1) 
+          
         out <- 
           tryCatch(
             expr = {
@@ -133,8 +137,8 @@ out_sims <-
                                    start_vacc = cand$start_vacc, 
                                    I_seeds = cand$I_seeds, 
                                    vacc_dt = vacc_dt,
-                                   params = c(R0 = R0_vals[j], k = k_vals[j], 
-                                              iota = iota_vals[j], 
+                                   params = c(R0 = R0_val, k = k_val, 
+                                              iota = iota_val, 
                                               param_defaults),
                                    days_in_step = cand$days_in_step,
                                    observe_fun = beta_detect_monthly,
@@ -156,14 +160,14 @@ out_sims <-
                                    by_admin = cand$by_admin,
                                    extra_pars = list(obs_data = obs_data))
               
-              out <- data.table(simstats, R0 = R0_vals[j], 
-                                k = k_vals[j], 
-                                iota = iota_vals[j])
+              out <- data.table(simstats, R0 = R0_val, 
+                                k = k_val, 
+                                iota = iota_val)
             },
             error = function(e){
               # write out the error & the parameter log
-              err <- cbind(R0 = R0_vals[j], k = k_vals[j], 
-                           iota = iota_vals[j], cand,
+              err <- cbind(R0 = R0_val, k = k_val, 
+                           iota = iota_val, cand,
                            e$message)
               write.csv(err, 
                         paste0("logs/err", 

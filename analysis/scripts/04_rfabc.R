@@ -1,4 +1,4 @@
-# Random Forest ABC: Parameter estimation
+# Random Forest ABC: Parameter estimation -------
 
 # packages
 library(data.table)
@@ -26,7 +26,7 @@ load("data/incursions.rda")
 load("data/sd_case_data.rda")
 
 # model of interest
-cand <- fread("analysis/out/fit/candidates.csv")[11, ]
+cand <- fread("analysis/out/fit/candidates.csv")[26, ]
 reftab_name <- get_name(cand)
 reftable_all <- fread(paste0("analysis/out/fit/", reftab_name, ".csv"))
 
@@ -46,7 +46,7 @@ model_rf_iota <- regAbcrf(iota ~ ., reftable[, !c("R0", "k")],
                           paral = TRUE, ncores = 3)
 plot(model_rf_iota)
 predict(model_rf_iota, obs_data, reftable[, !c("R0", "k")])
-out <- weights(model_rf_iota, obs_data, reftable[, !c("R0", "k")])
+out3 <- weights(model_rf_iota, obs_data, reftable[, !c("R0", "k")])
 
 # Try on cluster w & without detect_cores & doMPI backend (check how the paral works in rfabv)
 model_rf_R0 <- regAbcrf(R0 ~ ., reftable[, !c("iota", "k")], 
@@ -62,6 +62,17 @@ model_rf_k <- regAbcrf(k ~ ., reftable[, !c("R0", "iota")], paral = TRUE,
 plot(model_rf_k)
 predict(model_rf_k, obs_data, reftable[, !c("R0", "iota")], paral = TRUE)
 out2 <- weights(model_rf_k, obs_data, reftable[, !c("R0", "iota")], ncores = 3)
+
+test[, acc_R0_iota := R0_weights.V1 > 0 & iota_weights.V1 > 0]
+test[, acc_k_iota := k_weights.V1 > 0 & iota_weights.V1 > 0]
+test[, acc_R0_k := R0_weights.V1 > 0 & k_weights.V1 > 0]
+ggplot(test) + geom_point(aes(x = R0, y = k, color = acc_R0_k, alpha = acc_R0_k)) + scale_alpha_discrete(c(0.5, 1))
+ggplot(test) + geom_point(aes(x = iota, y = k, color = acc_k_iota, alpha = acc_k_iota)) + scale_alpha_discrete(c(0.5, 1))
+ggplot(test) + geom_point(aes(x = iota, y = R0, color = acc_R0_iota, alpha = acc_R0_iota)) + scale_alpha_discrete(c(0.5, 1))
+dens <- test[R0_weights.V1 > 0 & k_weights.V1 > 0 & iota_weights.V1 > 0]
+plot(density(dens$R0))
+plot(density(dens$k))
+plot(density(dens$iota))
 
 covRegAbcrf(model_rf_iota, model_rf_R0, obs_data, reftable[, !c("R0", "k")],
             reftable[, !c("iota", "k")], paral = TRUE, ncores = 3)

@@ -54,20 +54,25 @@ inc_stats <- function(names = c("I_dt", "ncells", "tmax", "extra_pars",
                                 date_fun = lubridate::ymd,
                                 units = 'months')]
   
+  # Weekly acfs
+  I_ts_week <- tabulate(floor(I_dt$t_infectious), tmax)
+  # temporal corr
+  acfs_week <- as.vector(acf(I_ts_week, lag.max = 10, plot = FALSE)$acf)[-1]
+  names(acfs_week) <- paste0("acf_week", 1:10)
+  
   # Summarize monthly cases
   I_ts <- tabulate(floor(I_dt$ts_agg), length(obs_data$cases_by_month))
-  I_cell <- tabulate(I_dt$cell_id, ncells)
   
-  # if sim is actually broken then break it some more
-  if(prop_start_pop < break_threshold) {
+  # account for simulations stopped early
+  stopped <- prop_start_pop < break_threshold
+  
+  if(stopped) {
     brk_date <- ymd(start_date) + duration(t, "weeks")
     brk <- get_timestep(date = brk_date, 
                         origin_date = start_date,
                         date_fun = lubridate::ymd,
                         units = 'months')
-    I_ts <- sample(I_ts[1:brk], length(I_ts), replace = TRUE)
-    I_cells_tab <- sample(I_dt$cell_id, sum(I_ts), replace = TRUE)
-    I_cell <- tabulate(I_cells_tab, ncells)
+    I_ts <- I_ts[1:brk]
   }
   
   # return stats on the time series (should not have NAs)
@@ -77,7 +82,7 @@ inc_stats <- function(names = c("I_dt", "ncells", "tmax", "extra_pars",
   
   # temporal corr
   acfs <- as.vector(acf(I_ts, lag.max = 10, plot = FALSE)$acf)[-1]
-  names(acfs) <- paste0("acf_lag", 1:10)
+  names(acfs) <- paste0("acf_month", 1:10)
   
   # spatial corr
   I_dt <- I_dt[!is.na(x_coord) | !is.na(y_coord)]
@@ -90,45 +95,30 @@ inc_stats <- function(names = c("I_dt", "ncells", "tmax", "extra_pars",
   mean_dist_8wks_norm <- mean_dist_8wks/mean_dist_all
   
   # temporal loss
-  temp_rmse <- sqrt(mean((I_ts - obs_data$cases_by_month)^2))
-  temp_loss <- mean(abs(I_ts - obs_data$cases_by_month))
+  temp_rmse <- sqrt(mean((I_ts - obs_data$cases_by_month[1:length(I_ts)])^2))
+  temp_loss <- mean(abs(I_ts - obs_data$cases_by_month[1:length(I_ts)]))
   
   # spatial loss
-  spat_rmse <- sqrt(mean((I_cell - obs_data$cases_by_cell)^2))
-  spat_loss <- mean(abs(I_cell - obs_data$cases_by_cell))
+  I_cell <- tabulate(I_dt$cell_id, ncells)
+  obs_data_prop <- obs_data$cases_by_cell/sum(obs_data$cases_by_cell)
+  I_cell_prop <- I_cell/sum(I_cell)
+  spat_rmse <- sqrt(mean((I_cell_prop -  obs_data_prop)^2))
+  spat_loss <- sum(abs(I_cell_prop - obs_data_prop))
 
   # ks discrete statistic
-  breaks <- seq(0, max(I_ts) + 5, by = 5)
-  inc_hist <- hist(I_ts, breaks = breaks, plot = FALSE)$count
-  lobs <- length(obs_data$inc_hist)
+  kb_temp <- kb_stat(obs_data$cases_by_month, I_ts)
+  kb_spat <- kb_stat(obs_data$cases_by_cell, I_cell)
   
-  if(length(inc_hist) > lobs) {
-    inc_hist <- c(inc_hist[1:lobs], 
-                  sum(inc_hist[(lobs + 1):length(inc_hist)]))
-    obs_data$inc_hist <- c(obs_data$inc_hist, 0)
-  }
-  
-  if(length(inc_hist) < lobs) {
-    inc_hist <- c(inc_hist, rep(0, lobs - length(inc_hist))) 
-  }
-  
-  ks_stat <- max(abs(inc_hist - obs_data$inc_hist))
-  hist_rmse <- sqrt(mean((inc_hist - obs_data$inc_hist)^2))
-  hist_loss <- mean(abs(inc_hist - obs_data$inc_hist))
-  
-  # depletion of population
-  broken <- prop_start_pop < break_threshold
-  pop_decline <- ifelse(prop_start_pop >= 1, 0, 1 - prop_start_pop)
-
   # out data.table
-  return(data.table(max_I, median_I, mean_I, ks_stat,hist_rmse,
-                    hist_loss, mean_dist_4wks, mean_dist_8wks, 
+  return(data.table(max_I, median_I, mean_I, kb_temp, kb_spat,
+                    mean_dist_4wks, mean_dist_8wks, 
                     mean_dist_4wks_norm, mean_dist_8wks_norm, 
                     spat_rmse, spat_loss,
                     temp_rmse, temp_loss, 
                     mean_dist_all,
-                    t(acfs), prop_start_pop, 
-                    broken, pop_decline))
+                    t(acfs), t(acfs_week), 
+                    prop_start_pop, break_threshold, 
+                    stopped))
 
 }
 
@@ -261,4 +251,12 @@ times_linked <- function(I_dt) {
   return(times$ts)
 }
 
+kb_stat <- function(x, y) {
+  
+  pmax <- max(c(x, y))
+  px <- tabulate(x, pmax)/sum(x)
+  py <- tabulate(y, pmax)/sum(y)
+  
+  sum(exp(px) * (log(exp(px) / exp(py))))
 
+}

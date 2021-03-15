@@ -15,7 +15,7 @@ library(magrittr)
 # Baseline parameters
 pars <- data.frame(track = FALSE,
                    start_vacc = 0.2,
-                   break_threshold = 0.95,
+                   break_threshold = 0.85,
                    I_seeds = 0, 
                    death_rate = 0.48, 
                    nyears = 2020 - 2002, 
