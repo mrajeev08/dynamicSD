@@ -1,11 +1,17 @@
 # get month from start date
-get_timestep <- function(date, origin_date = "01-01-2002",
+get_timestep <- function(date, origin_date = "2002-01-01",
                          date_fun = lubridate::dmy,
-                         units = "weeks") {
+                         days_in_step) {
 
-  as.numeric(lubridate::as.duration(date_fun(date) - date_fun(origin_date)), units)
+  as.numeric(date_fun(date) - lubridate::ymd(origin_date)) / days_in_step
 }
-
+ 
+get_date <- function(origin_date = "2002-01-01", 
+                     tstep, 
+                     days_in_step) {
+ lubridate::as_date(lubridate::ymd(origin_date) + tstep * days_in_step)
+  
+}
 
 # getting cellid of raster based on utm coords
 # so as not have to match names!
@@ -99,4 +105,9 @@ get_latest <- function(path, pattern) {
   list.files(path, full.names = TRUE)[grep(pattern, list.files(path))][1]
 }
 
-
+list_funs <- function(filename) {
+  temp.env <- new.env()
+  sys.source(filename, envir = temp.env)
+  functions <- ls(envir = temp.env)
+  return(functions)
+}

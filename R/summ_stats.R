@@ -14,7 +14,7 @@ ts_stats <- function(names = c("I_dt", "ncells", "tmax",
   I_dt[, ts_agg := get_timestep(date, 
                                 origin_date = start_date,
                                 date_fun = lubridate::ymd,
-                                units = 'months')]
+                                days_in_step)]
 
   # Summarize monthly cases
   I_ts <- tabulate(floor(I_dt$ts_agg), length(obs_data$cases_by_month))
@@ -37,8 +37,7 @@ ts_stats <- function(names = c("I_dt", "ncells", "tmax",
 # Summary stats for abc ----
 inc_stats <- function(names = c("I_dt", "ncells", "tmax", "extra_pars", 
                                 "days_in_step", "prop_start_pop", 
-                                "break_threshold", "t"), 
-                      start_date = "2002-01-01") {
+                                "break_threshold", "t", "start_date")) {
 
   # Get the objects you need from the environment above this one
   list2env(use_mget(names, envir_num = 2), envir = environment())
@@ -48,30 +47,42 @@ inc_stats <- function(names = c("I_dt", "ncells", "tmax", "extra_pars",
   I_dt <- I_dt[infected & detected]
   
   # aggregate cols by timestep (dates!)
-  I_dt[, date := lubridate::as_date(lubridate::ymd(start_date) + lubridate::duration(t_infectious, "weeks"))]
+  I_dt[, date := get_date(origin_date = start_date, 
+                          tstep = t_infectious, 
+                          days_in_step = days_in_step)]
+  
   I_dt[, ts_agg := get_timestep(date, 
                                 origin_date = start_date,
                                 date_fun = lubridate::ymd,
-                                units = 'months')]
+                                days_in_step = 30.5)]
+  I_dt[, ts_agg_week := get_timestep(date, 
+                                     origin_date = start_date,
+                                     date_fun = lubridate::ymd,
+                                     days_in_step = 7)]
   
   # Weekly acfs
-  I_ts_week <- tabulate(floor(I_dt$t_infectious), tmax)
+  I_ts_week <- tabulate(I_dt$ts_agg_week, max(I_dt$ts_agg_week))
   # temporal corr
   acfs_week <- as.vector(acf(I_ts_week, lag.max = 10, plot = FALSE)$acf)[-1]
-  names(acfs_week) <- paste0("acf_week", 1:10)
+  if(length(acfs_week) < 9) {
+    acfs_week <- c(acfs_week, rep(0, 9 - length(acfs_week)))
+  }
+  names(acfs_week) <- paste0("acf_week", 1:9)
   
   # Summarize monthly cases
-  I_ts <- tabulate(floor(I_dt$ts_agg), length(obs_data$cases_by_month))
+  I_ts <- tabulate(I_dt$ts_agg, length(obs_data$cases_by_month))
   
   # account for simulations stopped early
   stopped <- prop_start_pop < break_threshold
   
   if(stopped) {
-    brk_date <- ymd(start_date) + duration(t, "weeks")
+    brk_date <- get_date(origin_date = start_date, 
+                         tstep = t, 
+                         days_in_step = days_in_step)
     brk <- get_timestep(date = brk_date, 
                         origin_date = start_date,
                         date_fun = lubridate::ymd,
-                        units = 'months')
+                        days_in_step = 30.5)
     I_ts <- I_ts[1:brk]
   }
   
@@ -81,8 +92,11 @@ inc_stats <- function(names = c("I_dt", "ncells", "tmax", "extra_pars",
   mean_I <- mean(I_ts)
   
   # temporal corr
-  acfs <- as.vector(acf(I_ts, lag.max = 10, plot = FALSE)$acf)[-1]
-  names(acfs) <- paste0("acf_month", 1:10)
+  acfs <- as.vector(acf(I_ts, lag.max = 6, plot = FALSE)$acf)[-1]
+  if(length(acfs) < 5) {
+    acfs <- c(acfs, rep(0, 5 - length(acfs)))
+  }
+  names(acfs) <- paste0("acf_month", 1:5)
   
   # spatial corr
   I_dt <- I_dt[!is.na(x_coord) | !is.na(y_coord)]
@@ -118,7 +132,7 @@ inc_stats <- function(names = c("I_dt", "ncells", "tmax", "extra_pars",
                     mean_dist_all,
                     t(acfs), t(acfs_week), 
                     prop_start_pop, break_threshold, 
-                    stopped))
+                    stopped)) 
 
 }
 

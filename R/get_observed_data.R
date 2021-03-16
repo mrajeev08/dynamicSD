@@ -1,38 +1,40 @@
 
-get_observed_data <- function(sd_case_data, mod_specs, mod_start) {
-  # unit of simulation
-  units <- case_when(mod_specs$days_in_step == 7 ~ "weeks", 
-                     mod_specs$days_in_step == 1 ~ "days", 
-                     mod_specs$days_in_step == 30.5 ~ "months")
-  tmult <- case_when(mod_specs$days_in_step == 7 ~ 52, 
-                     mod_specs$days_in_step == 1 ~ 365, 
-                     mod_specs$days_in_step == 30.5 ~ 12)
+get_observed_data <- function(sd_case_data, cand, out) {
+  
+  days_in_step <- cand$days_in_step
+  start_date <- cand$start_date
+  
+  # get timesteps & tmax using approximate dates
+  step <- 365.25 / days_in_step
+  tmax <- ceiling(as.numeric(lubridate::ymd(cand$apprx_end_date) - lubridate::ymd(start_date)) / days_in_step)
+  
+  # actual end date (to ensure same number of days in each timestep)
+  end_date <- lubridate::ymd(start_date) + tmax * days_in_step
+  
   sd_case_data %<>%
     mutate(t_infectious = get_timestep(symptoms_started, 
-                                origin_date = "01-01-2002",
-                                date_fun = lubridate::dmy,
-                                units = units), 
+                                       origin_date = start_date, 
+                                       date_fun = lubridate::dmy, 
+                                       days_in_step = days_in_step), 
            month = get_timestep(symptoms_started, 
-                                origin_date = "01-01-2002",
+                                origin_date = start_date,
                                 date_fun = lubridate::dmy,
-                                units = "months"),
-           cell_id = cellFromXY(mod_start$rast, cbind(utm_easting, utm_northing)), 
+                                days_in_step = days_in_step),
+           cell_id = cellFromXY(out$rast, cbind(utm_easting, utm_northing)), 
            infected = TRUE, detected = TRUE) 
   
   # cases by month & cell
-  cases_by_month <- tabulate(sd_case_data$month, nbins = mod_specs$nyears * 12)
-  cases_by_cell <- tabulate(sd_case_data$cell_id, nbins = ncell(mod_start$rast))
+  cases_by_month <- tabulate(sd_case_data$month, nbins = max(sd_case_data$month))
+  cases_by_cell <- tabulate(sd_case_data$cell_id, nbins = ncell(out$rast))
 
   # set-up for input into summ_stats
-  ncells <- ncell(mod_start$rast)
-  tmax <- mod_specs$nyears * tmult
+  ncells <- ncell(out$rast)
   extra_pars <- list(obs_data =  list(cases_by_month = cases_by_month,
                                       cases_by_cell = cases_by_cell))
   t <- tmax
-  days_in_step <- mod_specs$days_in_step
-  prop_start_pop <- 7e4/sum(mod_start$start_pop, na.rm = TRUE)
+  prop_start_pop <- 7e4/sum(out$start_pop, na.rm = TRUE)
   break_threshold <- 0
-
+  
   sd_case_data %>%
     dplyr::select(t_infectious, x_coord = utm_easting, y_coord = utm_northing, 
                   infected, detected, cell_id) %>%

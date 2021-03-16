@@ -59,17 +59,17 @@ run_simrabid <- function(cand,
     weights <- NULL
   }
   
-  # params (do this parallel, spit out i + systemtime + wrap in trycatch!
+  # decide parameters based on args from cand
   disp_fn <- ifelse(cand$sequential, simrabid::steps_weibull, simrabid::dispersal_lognorm)
   inc_fn <- ifelse(cand$estincs, simrabid::sim_incursions_pois, simrabid::sim_incursions_hardwired)
   move_fn <- ifelse(cand$weights, simrabid::sim_movement_prob, simrabid::sim_movement_continuous)
+  if(!cand$estincs) priors$iota <- function(n) rep(0, n)
   
-  # setting up priors
+  # removing args if they're included in the priors
   param_defaults <- param_defaults[!(names(param_defaults) %in% names(param_ests))]
   
   # check priors & make sure they're reproducible
   set.seed(cand$seed)
-  
   param_ests <- lapply(param_ests, function(x) {
     if(is.function(x)) {
       x(nsims)
@@ -157,7 +157,7 @@ run_simrabid <- function(cand,
   if(is.null(out_sims)) {
     message("No simulations were successful! Check the logs for more info, 
             returning NA for now.")
-    out_sims <- NA
+    out_sims <- list(NA)
   }
   
   return(out_sims)

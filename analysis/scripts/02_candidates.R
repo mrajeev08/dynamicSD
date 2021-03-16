@@ -18,10 +18,11 @@ pars <- data.frame(track = FALSE,
                    break_threshold = 0.85,
                    I_seeds = 0, 
                    death_rate = 0.48, 
-                   nyears = 2020 - 2002, 
-                   steps = 52, 
                    days_in_step = 7, 
-                   leave_bounds = TRUE)
+                   leave_bounds = TRUE,
+                   waning = 1/3,
+                   start_date = "2002-01-01", 
+                   apprx_end_date = "2020-12-31")
 
 # candidate df to write out
 cand <- tidyr::expand_grid(sequential = c(TRUE, FALSE),

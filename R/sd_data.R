@@ -79,14 +79,14 @@ get_sd_pops <- function(sd_shapefile, res_m, sd_census_data, death_rate_annual) 
 #'
 get_sd_vacc <- function(sd_vacc_data,
                         sd_shapefile,
-                        origin_date = "01-Jan-2002",
+                        origin_date,
                         date_fun = lubridate::dmy,
-                        units = "weeks",
+                        days_in_step,
                         rollup = 4) {
 
   sd_vacc_data %>%
     mutate(vacc_times = floor(get_timestep(start_date, origin_date,
-                                           date_fun, units))) %>%
+                                           date_fun, days_in_step))) %>%
     group_by(villcode, vacc_times) %>%
     summarize(vacc_est = sum(dogs_vaccinated)) %>%
     mutate(vacc_locs = match(villcode, sd_shapefile$villcode)) -> vacc_data
