@@ -1,93 +1,42 @@
-run_candidate_mod <- function(cand, 
-                              priors,
-                              nsims, 
-                              combine_fun, 
-                              name_fun, 
-                              seed = 2341) {
+run_simrabid <- function(cand, 
+                         mod_specs,
+                         param_ests,
+                         param_defaults,
+                         nsims, 
+                         extra_pars,
+                         vacc_dt,
+                         combine_fun, 
+                         summary_fun, 
+                         secondary_fun,
+                         weight_covars, 
+                         weight_params, 
+                         multi = FALSE) {
   
   
-  # Candidate models (to benchmark) ---------
-  
-  # sub_cmd:=-t 1 -n 21 -jn fit -wt 1m -sp analysis/scripts/fit.R -md 'gdal' -ar '1-2'
-  
-  ind <- commandArgs(trailingOnly = TRUE)
-  
-  # Set up on cluster ------
-  source("R/utils.R")
-  set_up <- setup_cl(mpi = TRUE)
-  
-  cl <- make_cl(set_up$ncores)
-  register_cl(cl)
-  print(paste("Cluster size:", cl_size(cl)))
-  
-  if(!set_up$slurm) fp <- here::here else fp <- cl_safe
-  
-  # Dependencies
-  library(raster)
-  library(data.table)
-  library(sf)
-  library(tidyr)
-  library(dplyr)
-  library(magrittr)
-  library(simrabid) # remotes::install_github("mrajeev08/simrabid")
-  library(foreach)
-  library(iterators)
-  library(doRNG)
-  library(lubridate)
-  
-  # set up args
-  mod_ind <- as.numeric(ind[1])
-  cand <- fread(fp("analysis/out/fit/candidates.csv"))[mod_ind, ]
-  nsims <- 1e3
-  
-  # load in shapefile & other data
-  sd_shapefile <- st_read(system.file("extdata/sd_shapefile.shp", 
-                                      package = "simrabid"))
-  load("data/sd_census_data.rda")
-  load("data/sd_vacc_data.rda")
-  load("data/incursions.rda")
-  load("data/sd_case_data.rda")
-  
-  # source other scriptss
-  source("R/sd_data.R")
-  source("R/get_observed_data.R")
-  source("R/utils-data.R")
-  source("R/summ_stats.R")
-  
-  # Testing function ---------
-  vacc_dt <- get_sd_vacc(sd_vacc_data, sd_shapefile, origin_date = "01-Jan-2002",
-                         date_fun = lubridate::dmy, units = "weeks", rollup = 4)
-  
-  # Set up priors
-  priors <- list(R0 = function(n) exp(rnorm(n, mean = 0.1, sd = 0.2)), # centered around 1.1
-                 iota = function(n) exp(rnorm(n, mean = 0, sd = 1)),
-                 k = function(n) exp(rnorm(n, mean = 0, sd = 2)))
-  
-  # Get the startup
-  out <- get_sd_pops(sd_shapefile, res_m = 1000,
-                     sd_census_data, death_rate_annual = cand$death_rate)
-  
-  start_up <- setup_sim(tmax = cand$steps * (cand$nyears),
-                        rast = out$rast,
-                        death_rate_annual = out$death_rate_annual,
-                        birth_rate_annual = out$birth_rate_annual,
-                        waning_rate_annual = 1/3,
+  start_up <- setup_sim(start_date = cand$start_date, 
+                        apprx_end_date =  cand$apprx_end_date, 
+                        days_in_step = cand$days_in_step, 
+                        rast = mod_specs$rast,
+                        death_rate_annual = mod_specs$death_rate_annual,
+                        birth_rate_annual = mod_specs$birth_rate_annual,
+                        waning_rate_annual = cand$waning,
                         block_fun = block_cells,
-                        params = list(start_pop = out$start_pop),
-                        step = cand$steps,
+                        params = list(start_pop = mod_specs$start_pop),
                         by_admin = cand$by_admin)
   
-  
   if(!cand$estincs) {
+    
     # add cell ids & timesteps of incursion to parameter defaults
+    # get rid of this once okay
     incursions %<>%
-      mutate(cell_id = raster::cellFromXY(out$rast,
+      mutate(cell_id = raster::cellFromXY(mod_specs$rast,
                                           cbind(x_coord, y_coord)), 
              tstep = get_timestep(date, 
-                                  origin_date = "2002-01-01",
+                                  origin_date = cand$start_date,
                                   date_fun = lubridate::ymd, 
-                                  units = "weeks"))
-    mean_per_week <- mean(tabulate(incursions$tstep))
+                                  days_in_step = cand$days_in_step))
+    
+    mean_per_week <- mean(tabulate(incursions$tstep)) * 2
     sim_inc_steps <- seq(ceiling(max(incursions$tstep)), start_up$tmax)
     sim_inc_n <- rpois(length(sim_inc_steps), mean_per_week)
     tstep_add <- rep(sim_inc_steps, sim_inc_n)
@@ -99,11 +48,11 @@ run_candidate_mod <- function(cand,
   }
   
   if(cand$weights) {
-    weights <- cell_weights(covars = list(0),
-                            params = list(0),
+    weights <- cell_weights(covars = weight_covars,
+                            params = weight_params,
                             start_up$ncell,
-                            leave_bounds = TRUE,
-                            allow_invalid = FALSE,
+                            leave_bounds = cand$leave_bounds,
+                            allow_invalid = cand$allow_invalid,
                             cells_block = start_up$cells_block,
                             cells_out_bounds = start_up$cells_out_bounds)
   } else {
@@ -115,62 +64,102 @@ run_candidate_mod <- function(cand,
   inc_fn <- ifelse(cand$estincs, simrabid::sim_incursions_pois, simrabid::sim_incursions_hardwired)
   move_fn <- ifelse(cand$weights, simrabid::sim_movement_prob, simrabid::sim_movement_continuous)
   
-  # priors
-  R0_vals <- priors$R0(nsims)
-  k_vals <- priors$k(nsims)
-  if(cand$estincs) iota_vals <- priors$iota(nsims) else iota_vals <- rep(0, nsims)
+  # setting up priors
+  param_defaults <- param_defaults[!(names(param_defaults) %in% names(param_ests))]
   
-  foreach(j = seq_len(nsims), .combine = rbind, 
-          .packages = c("simrabid", "dplyr", 
-                        "data.table", "sf", "raster", 
-                        "magrittr"), 
-          .options.RNG = cand$seed) %dorng% {
-    
-    test <-
-      tryCatch(
-        expr = {
-          simstats <- simrabid(start_up, 
-                               start_vacc = cand$start_vacc, 
-                               I_seeds = cand$I_seeds, 
-                               vacc_dt = vacc_dt,
-                               params = c(R0 = R0_vals[j], k = k_vals[j], 
-                                          iota = iota_vals[j], 
-                                          param_defaults),
-                               days_in_step = cand$days_in_step,
-                               observe_fun = beta_detect_monthly,
-                               serial_fun = serial_lognorm,
-                               dispersal_fun = disp_fn, 
-                               secondary_fun = nbinom_constrained, 
-                               incursion_fun = inc_fn, 
-                               movement_fun = move_fn,
-                               sequential = cand$sequential, 
-                               allow_invalid = cand$allow_invalid,
-                               leave_bounds = cand$leave_bounds, 
-                               max_tries = 100,
-                               summary_fun = inc_stats, # use inc_stats after testing!
-                               track = cand$track,
-                               weights = weights, 
-                               row_probs = NULL,
-                               coverage = FALSE,
-                               break_threshold = cand$break_threshold,
-                               by_admin = cand$by_admin,
-                               extra_pars = list(obs_data = obs_data))
-          
-          out <- data.table(simstats, R0 = R0_vals[j], 
-                            k = k_vals[j], 
-                            iota = iota_vals[j])
-        },
-        error = function(e){
-          # write out the error & the parameter log
-          err <- cbind(R0 = R0_vals[j], k = k_vals[j], 
-                       iota = iota_vals[j], cand,
-                       e$message)
-          write.csv(err, paste0(log_error, format(Sys.time(), "%Y%m%d"), ".csv"))
-          NULL
+  # check priors & make sure they're reproducible
+  set.seed(cand$seed)
+  
+  param_ests <- lapply(param_ests, function(x) {
+    if(is.function(x)) {
+      x(nsims)
+    } else {
+      if (length(x) == nsims) {
+        x
+      } else {
+        if(length(x) == 1) {
+          rep(x, nsims)
+        } else {
+          stop("Parameter passed, but it is not a function, of length 1, or of length nsims!")
         }
-      )
-    test
-  } -> out
+      }
+    }
+  })
+  
+  # functions to export to foreach loop
+  export_funs <- c(list_funs("R/utils-data.R"), 
+                   list_funs("R/summ_stats.R"))
+  
+  out_sims <-
+    foreach(j = seq_len(nsims), 
+            .combine = combine_fun, 
+            .multicombine = multi, 
+            .packages = c("simrabid", 
+                          "data.table", 
+                          "raster", 
+                          "magrittr"),
+            .export = export_funs,
+            .options.RNG = cand$seed) %dorng% {
+              
+              # draw a val 
+              pars <- lapply(param_ests, function(x) x[j])
+              
+              out <- 
+                tryCatch(
+                  expr = {
+                    simstats <- simrabid(start_up, 
+                                         start_vacc = cand$start_vacc, 
+                                         I_seeds = cand$I_seeds, 
+                                         vacc_dt = vacc_dt,
+                                         params = c(pars, 
+                                                    param_defaults),
+                                         days_in_step = cand$days_in_step,
+                                         observe_fun = beta_detect_monthly,
+                                         serial_fun = serial_lognorm,
+                                         dispersal_fun = disp_fn, 
+                                         secondary_fun = secondary_fun, # function argument 
+                                         incursion_fun = inc_fn, 
+                                         movement_fun = move_fn,
+                                         sequential = cand$sequential, 
+                                         allow_invalid = cand$allow_invalid,
+                                         leave_bounds = cand$leave_bounds, 
+                                         max_tries = 100,
+                                         summary_fun = summary_fun, # function argument
+                                         track = cand$track,
+                                         weights = weights, 
+                                         row_probs = NULL,
+                                         coverage = FALSE,
+                                         break_threshold = cand$break_threshold,
+                                         by_admin = cand$by_admin,
+                                         extra_pars = extra_pars)
+                    
+                    out <- data.table(simstats, t(pars), sim = j)
+                  },
+                  error = function(e){
+                    # write out the error & the parameter log
+                    err <- data.table(t(pars), cand,  
+                                      message = e$message)
+                    fwrite(err, 
+                              paste0("logs/run_simrabid_err", 
+                                     format(Sys.time(), "%Y%m%d_%H%M%S"), 
+                                     ".csv"),
+                              row.names = FALSE)
+                    NULL
+                  }
+                )
+            }
+  
+  if(!all(out_sims$sim %in% 1:nsims)) {
+    message("Warning: some simulations failed, check the logs directory for
+            more info!")
+  }
+  
+  if(is.null(out_sims)) {
+    message("No simulations were successful! Check the logs for more info, 
+            returning NA for now.")
+    out_sims <- NA
+  }
+  
+  return(out_sims)
   
 }
-

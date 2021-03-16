@@ -105,7 +105,6 @@ disp_fn <- ifelse(cand$sequential, simrabid::steps_weibull, simrabid::dispersal_
 inc_fn <- ifelse(cand$estincs, simrabid::sim_incursions_pois, simrabid::sim_incursions_hardwired)
 move_fn <- ifelse(cand$weights, simrabid::sim_movement_prob, simrabid::sim_movement_continuous)
 
-
 # Set up priors
 priors <- list(R0 = function(n) exp(rnorm(n, mean = 0.1, sd = 0.2)), # centered around 1.1
                iota = function(n) exp(rnorm(n, mean = 0.5, sd = 0.5)), # centered around 1.5
