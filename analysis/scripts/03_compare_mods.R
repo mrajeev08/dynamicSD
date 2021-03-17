@@ -1,36 +1,36 @@
-# Candidate models (to benchmark) ---------
+# Random Forest ABC: Model choice -------
 
-# sub_cmd:=-t 1 -n 21 -jn fit -wt 1m -md 'gdal' -ar '1-4' -cmd '100'
-
-arg <- commandArgs(trailingOnly = TRUE)
+# sub_cmd:=-t 1 -n 6 -jn fit -wt 1m -md 'gdal' -sp "analysis/scripts/04_rfabc.R" -sn
 
 # Set up on cluster ------
 source("R/utils.R")
-set_up <- setup_cl(mpi = TRUE)
+set_up <- setup_cl(mpi = FALSE)
 
+if(!set_up$slurm) fp <- here::here else fp <- cl_safe
+
+# This isn't necessary for ranger but it is for the parallelization part 
+# of the predict.regabcrf
 cl <- make_cl(set_up$ncores)
 register_cl(cl)
 print(paste("Cluster size:", cl_size(cl)))
 
-if(!set_up$slurm) fp <- here::here else fp <- cl_safe
-
-# Dependencies
-library(raster)
+# packages
 library(data.table)
+library(abcrf)
 library(sf)
-library(tidyr)
+library(simrabid)
+library(raster)
 library(dplyr)
 library(magrittr)
-library(simrabid) # remotes::install_github("mrajeev08/simrabid")
 library(foreach)
-library(iterators)
-library(doRNG)
-library(lubridate)
 
-# set up args
-mod_ind <- as.numeric(arg[1])
-cand <- fread(fp("analysis/out/fit/candidates.csv"))[mod_ind, ]
-nsims <- as.numeric(arg[2])
+# scripts
+source("R/utils.R")
+source("R/sd_data.R")
+source("R/utils-data.R")
+source("R/get_observed_data.R")
+source("R/summ_stats.R")
+source("R/compare_mods.R")
 
 # load in shapefile & other data
 sd_shapefile <- st_read(system.file("extdata/sd_shapefile.shp", 
@@ -40,59 +40,53 @@ load("data/sd_vacc_data.rda")
 load("data/incursions.rda")
 load("data/sd_case_data.rda")
 
-# source other scriptss
-source("R/sd_data.R")
-source("R/get_observed_data.R")
-source("R/utils-data.R")
-source("R/summ_stats.R")
-source("R/run_mods.R")
-
-# Testing function ---------
-vacc_dt <- get_sd_vacc(sd_vacc_data, sd_shapefile, origin_date = cand$start_date,
-                       date_fun = lubridate::dmy, days_in_step = cand$days_in_step,
-                       rollup = 4)
-
-# get the startup space
+# for getting observed data
+cand <- fread(fp("analysis/out/fit/candidates.csv"))[1, ]
 out <- get_sd_pops(sd_shapefile, res_m = 1000,
                    sd_census_data, death_rate_annual = cand$death_rate)
-
-# Set up priors
-priors <- list(R0 = function(n) exp(rnorm(n, mean = 0.1, sd = 0.2)), # centered around 1.1
-               iota = function(n) exp(rnorm(n, mean = 0.5, sd = 0.5)), # centered around 1.5
-               k = function(n) exp(rnorm(n, mean = 0.5, sd = 0.5))) # uniform
-
-# get observed data
 obs_data <- get_observed_data(sd_case_data, 
                               cand = cand, 
-                              out = out)$obs_data
+                              out = out)$obs_sstats
 
-out_sims <- run_simrabid(cand = cand, 
-                         mod_specs = out,
-                         param_ests = priors,
-                         param_defaults = param_defaults,
-                         nsims = nsims, 
-                         extra_pars = list(obs_data = obs_data),
-                         vacc_dt = vacc_dt,
-                         combine_fun = 'rbind', 
-                         summary_fun = inc_stats, 
-                         secondary_fun = nbinom_constrained,
-                         weight_covars = list(0), 
-                         weight_params = list(0))  
+# Model comparison -----------
+reftab_list <-  get_reftab_list(dir = fp("analysis/out/fit"))
+reftl <- read_reftabs(reftab_list, dir = fp("analysis/out/fit"))
 
-file_out <- paste0("analysis/out/fit/", get_name(cand), ".csv")
+mod_comp <- compare_mods(reftable = reftl, 
+                         par_names = c("R0", "k", "iota"), 
+                         exclude = c("stopped", "sim", "break_threshold"),
+                         obs_data = obs_data, 
+                         ntree = 500, 
+                         ncores = set_up$ncores, 
+                         paral = TRUE,
+                         predict = TRUE, 
+                         return_training = FALSE)
 
+mod_comp_se <- compare_mod_se(reftable = reftl, 
+                              par_names = c("R0", "k", "iota"), 
+                              exclude = c("stopped", "sim", "break_threshold"),
+                              obs_data = obs_data, 
+                              samp_prop = 0.75, 
+                              nsims = 5, 
+                              ntree = 500, 
+                              ncores = set_up$ncores, 
+                              paral = TRUE, 
+                              predict = TRUE,
+                              return_training = FALSE) 
 
-write_create(out_sims,
-             fp(file_out),
-             data.table::fwrite)
-
+saveRDS(mod_comp, fp("analysis/out/mod_comp_full.rds"))
+saveRDS(mod_comp_se, fp("analysis/out/mod_comp_se.rds"))
 
 # Parse these from subutil for where to put things
-syncto <- "~/Documents/Projects/dynamicSD/analysis/out/"
-syncfrom <- "mrajeev@della.princeton.edu:/scratch/gpfs/mrajeev/dynamicSD/analysis/out/fit"
+syncto <- "~/Documents/Projects/dynamicSD/analysis/"
+syncfrom <- "mrajeev@della.princeton.edu:/scratch/gpfs/mrajeev/dynamicSD/analysis/out"
 
 # Close out
-out_session(logfile = set_up$logfile, start = set_up$start, ncores = set_up$ncores)
-close_cl(cl)
+out_session(logfile = set_up$logfile, 
+            start = set_up$start, 
+            ncores = set_up$ncores)
 
 print("Done:)")
+
+close_cl(cl)
+
