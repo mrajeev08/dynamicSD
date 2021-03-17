@@ -300,3 +300,14 @@ write_list_el <- function(x, name, dir) {
                if(is.data.table(x)) fwrite else saveRDS)
   
 }
+
+comb <- function(...) {
+  mapply('rbind', ..., SIMPLIFY = FALSE, fill = TRUE)
+}
+
+# helper for applys
+append_col <- function(x, col_name, val) {
+  if(is.data.table(x)) {
+    x[, c(col_name) := val]
+  }
+}

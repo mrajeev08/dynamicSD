@@ -1,6 +1,6 @@
 # Random Forest ABC: Model choice -------
 
-# sub_cmd:=-t 1 -n 6 -jn fit -wt 1m -md 'gdal' -sp "analysis/scripts/04_rfabc.R" -sn
+# sub_cmd:=-t 6 -n 12 -jn comp -wt 5m -md \"gdal\" -sn -@
 
 # Set up on cluster ------
 source("R/utils.R")
@@ -62,19 +62,20 @@ mod_comp <- compare_mods(reftable = reftl,
                          predict = TRUE, 
                          return_training = FALSE)
 
+saveRDS(mod_comp, fp("analysis/out/mod_comp_full.rds"))
+
 mod_comp_se <- compare_mod_se(reftable = reftl, 
                               par_names = c("R0", "k", "iota"), 
                               exclude = c("stopped", "sim", "break_threshold"),
                               obs_data = obs_data, 
                               samp_prop = 0.75, 
-                              nsims = 5, 
+                              nsims = 3, 
                               ntree = 500, 
                               ncores = set_up$ncores, 
                               paral = TRUE, 
                               predict = TRUE,
                               return_training = FALSE) 
 
-saveRDS(mod_comp, fp("analysis/out/mod_comp_full.rds"))
 saveRDS(mod_comp_se, fp("analysis/out/mod_comp_se.rds"))
 
 # Parse these from subutil for where to put things

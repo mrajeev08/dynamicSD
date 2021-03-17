@@ -56,13 +56,14 @@ compare_mods <- function(reftable,
                             by = modindex][[2]]]
   } 
   
-  modlookup <- unique.array(reftab[, c("modname", "modindex")])
+  modlookup <- data.table(unique.array(reftab[, c("modname", "modindex")]))
   
   reftab <- reftab[, !"modname", with = FALSE]
   
   mod_comp <- abcrf(modindex~., data = reftab, 
                     group = group_list,
                     paral = paral, ncores = ncores, 
+                    sampsize = sampsize,
                     ntree = ntree)
   
   if(predict) {
@@ -78,13 +79,16 @@ compare_mods <- function(reftable,
                              paral = paral, ncores = ncores, ntree = ntree)
     
     projobs <- data.table(predict(mod_comp$model.lda, obs_data)$x)
-    projobs[, c("type", "modindex") := .("observed", 
-                                         mod_predicted$allocation)]
+    projobs[, c("type", 
+                "modindex", 
+                "post_prob") := .("observed", 
+                                  mod_predicted$allocation, 
+                                  mod_predicted$post.prob)]
     
     lda_predicted <- rbind(lda_predicted, projobs)
     mod_predicted <- data.table(modindex = colnames(mod_predicted$vote), 
                                 votes = t(mod_predicted$vote))
-    
+
   } else {
     mod_predicted <- NULL
   }
@@ -100,9 +104,11 @@ compare_mods <- function(reftable,
   } else {
     training <- NULL
   }
-  return(list(mod_comp = mod_comp, training = training, err = err_abcrf, 
+  return(list(training = training, 
+              err = err_abcrf, 
               var_imp = var_imp,
-              mod_predicted = mod_predicted, lda_predicted = lda_predicted, 
+              mod_predicted = mod_predicted, 
+              lda_predicted = lda_predicted, 
               modlookup = modlookup))
   
 }
@@ -132,20 +138,8 @@ compare_mod_se <- function(reftable,
                         ntree, 
                         predict, 
                         return_training)
-    
-    out <- lapply(out, append_sim, i = i)
-    mod_comp[unlist(lapply(mod_comp, is.data.table))]
+    invisible(lapply(out, append_col, col_name = "nsim", val = i))
+    out[unlist(lapply(out, is.data.table))]
   }
-  
 }
 
-comb <- function(...) {
-  mapply('rbind', ..., SIMPLIFY = FALSE)
-}
-
-append_sim <- function(x, i) {
-  if(is.data.table(x)) {
-    x$nsim <- i
-  }
-  x
-}

@@ -1,6 +1,6 @@
 # Candidate models (to benchmark) ---------
 
-# sub_cmd:=-t 1 -n 21 -jn fit -wt 1m -md 'gdal' -ar '1-4' -cmd '100'
+# sub_cmd:=-t 1 -n 21 -jn sim -wt 1m -md 'gdal' -ar '1-4' -cmd '100'
 
 arg <- commandArgs(trailingOnly = TRUE)
 
