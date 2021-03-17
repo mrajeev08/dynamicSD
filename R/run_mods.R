@@ -70,6 +70,7 @@ run_simrabid <- function(cand,
   
   # check priors & make sure they're reproducible
   set.seed(cand$seed)
+  
   param_ests <- lapply(param_ests, function(x) {
     if(is.function(x)) {
       x(nsims)

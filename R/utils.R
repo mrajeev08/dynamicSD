@@ -290,3 +290,13 @@ get_name <- function(i, root = FALSE) {
    return(paste(root_name, i$seed, i$partition, sep = "_"))
   }
 }
+
+# helper to write out
+write_list_el <- function(x, name, dir) {
+  
+  ext <- ifelse(is.data.table(x), ".csv", ".rds")
+  
+  write_create(x, fp(dir, paste0(name, ext)), 
+               if(is.data.table(x)) fwrite else saveRDS)
+  
+}

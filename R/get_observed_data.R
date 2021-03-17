@@ -19,7 +19,7 @@ get_observed_data <- function(sd_case_data, cand, out) {
            month = get_timestep(symptoms_started, 
                                 origin_date = start_date,
                                 date_fun = lubridate::dmy,
-                                days_in_step = days_in_step),
+                                days_in_step = 30.5),
            cell_id = cellFromXY(out$rast, cbind(utm_easting, utm_northing)), 
            infected = TRUE, detected = TRUE) 
   

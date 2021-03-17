@@ -63,11 +63,13 @@ inc_stats <- function(names = c("I_dt", "ncells", "tmax", "extra_pars",
   # Weekly acfs
   I_ts_week <- tabulate(I_dt$ts_agg_week, max(I_dt$ts_agg_week))
   # temporal corr
-  acfs_week <- as.vector(acf(I_ts_week, lag.max = 10, plot = FALSE)$acf)[-1]
-  if(length(acfs_week) < 9) {
-    acfs_week <- c(acfs_week, rep(0, 9 - length(acfs_week)))
+  acfs_week <- as.vector(acf(I_ts_week, lag.max = 10, plot = FALSE,
+                             na.action = na.pass)$acf)[-1]
+  
+  if(length(acfs_week) < 10) {
+    acfs_week <- c(acfs_week, rep(0, 10 - length(acfs_week)))
   }
-  names(acfs_week) <- paste0("acf_week", 1:9)
+  names(acfs_week) <- paste0("acf_week", 1:10)
   
   # Summarize monthly cases
   I_ts <- tabulate(I_dt$ts_agg, length(obs_data$cases_by_month))
@@ -92,11 +94,12 @@ inc_stats <- function(names = c("I_dt", "ncells", "tmax", "extra_pars",
   mean_I <- mean(I_ts)
   
   # temporal corr
-  acfs <- as.vector(acf(I_ts, lag.max = 6, plot = FALSE)$acf)[-1]
-  if(length(acfs) < 5) {
-    acfs <- c(acfs, rep(0, 5 - length(acfs)))
+  acfs <- as.vector(acf(I_ts, lag.max = 6, plot = FALSE,
+                        na.action = na.pass)$acf)[-1]
+  if(length(acfs) < 6) {
+    acfs <- c(acfs, rep(0, 6 - length(acfs)))
   }
-  names(acfs) <- paste0("acf_month", 1:5)
+  names(acfs) <- paste0("acf_month", 1:6)
   
   # spatial corr
   I_dt <- I_dt[!is.na(x_coord) | !is.na(y_coord)]
