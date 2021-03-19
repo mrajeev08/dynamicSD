@@ -282,7 +282,11 @@ get_name <- function(i, root = FALSE) {
   seq <- ifelse(i$sequential, "seq", "kern")
   scale <- ifelse(i$by_admin, "vill", "grid1x1")
   est_incs <- ifelse(i$estincs, "estincs", "fixedincs")
-  move <- ifelse(i$weights, "moveprob", "movecont")
+  move <- dplyr::case_when(i$weights & !i$leave_bounds & !i$allow_invalid ~ "flim",
+                           i$weights & i$leave_bounds & !i$allow_invalid ~ "plim",
+                           i$weights & !i$leave_bounds & i$allow_invalid ~ "dlim",
+                           !i$weights ~ "nolim")
+  
   root_name <- paste(scale, move, est_incs, seq, sep = "_")
   if(root) {
     return(root_name)

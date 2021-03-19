@@ -1,6 +1,6 @@
 # Candidate models (to benchmark) ---------
 
-# sub_cmd:=-t 12 -n 21 -jn sim -wt 1m -md \'gdal\' -ar \'1-32\' -cmd \'5e4\'
+# sub_cmd:=-t 12 -n 21 -jn sim -wt 1m -md \'gdal\' -ar \'1-48\' -cmd \'1e3\'
 
 arg <- commandArgs(trailingOnly = TRUE)
 
@@ -56,10 +56,10 @@ vacc_dt <- get_sd_vacc(sd_vacc_data, sd_shapefile, origin_date = cand$start_date
 out <- get_sd_pops(sd_shapefile, res_m = 1000,
                    sd_census_data, death_rate_annual = cand$death_rate)
 
-# Set up priors
+# Set up priors from hampson et al. 2009
 priors <- list(R0 = function(n) exp(rnorm(n, mean = 0.1, sd = 0.2)), # centered around 1.1
-               iota = function(n) exp(rnorm(n, mean = 0.5, sd = 0.25)), # centered around 2
-               k = function(n) exp(rnorm(n, mean = 0.1, sd = 0.5))) # uniform
+               iota = function(n) exp(rnorm(n, mean = 0, sd = 0.5)), # centered around 1 / week
+               k = function(n) exp(rnorm(n, mean = 0.25, sd = 0.5))) # centered around 1.3 
 
 if(!cand$estincs) priors$iota <- function(n) rep(0, n)
 

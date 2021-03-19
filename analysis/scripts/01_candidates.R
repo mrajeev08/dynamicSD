@@ -1,6 +1,5 @@
 # Candidates --------
 
-
 # Set up on cluster ------
 source("R/utils.R")
 set_up <- setup_cl(mpi = TRUE)
@@ -34,7 +33,8 @@ cand %<>%
                                    weights == FALSE ~ TRUE), 
          apprx_end_date = case_when(estincs == TRUE ~ "2020-12-31", 
                               estincs == FALSE ~ "2015-12-31"), 
-         exclude = !weights & !leave_bounds)
+         exclude = !weights & !leave_bounds) %>%
+  filter(!exclude)
 
 cand <- cbind(cand, pars)
 

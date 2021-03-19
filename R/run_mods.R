@@ -11,7 +11,8 @@ run_simrabid <- function(cand,
                          secondary_fun,
                          weight_covars, 
                          weight_params, 
-                         multi = FALSE) {
+                         multi = FALSE, 
+                         convolve_steps = TRUE) {
   
   
   start_up <- setup_sim(start_date = cand$start_date, 
@@ -54,7 +55,16 @@ run_simrabid <- function(cand,
   }
   
   # decide parameters based on args from cand
-  disp_fn <- ifelse(cand$sequential, simrabid::steps_weibull, simrabid::dispersal_lognorm)
+  disp_fn <- ifelse(cand$sequential, 
+                    ifelse(convolve_steps, 
+                           function(n, params) { # actually steps are twice as long on avg
+                             rweibull(n, shape = params$steps_shape, 
+                                      scale = params$steps_scale) + 
+                              rweibull(n, shape = params$steps_shape, 
+                                       scale = params$steps_scale)
+                           }, simrabid::steps_weibull), 
+                    simrabid::dispersal_lognorm)
+  
   inc_fn <- ifelse(cand$estincs, simrabid::sim_incursions_pois, simrabid::sim_incursions_hardwired)
   move_fn <- ifelse(cand$weights, simrabid::sim_movement_prob, simrabid::sim_movement_continuous)
   

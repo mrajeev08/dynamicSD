@@ -20,7 +20,6 @@ estimate_pars <- function(reftable,
     reftab <- reftab[, !"modname", with = FALSE]
     
     if(sampsize < nrow(reftable)) {
-      # this will error if group sizes are not balanced!
       reftab <- reftab[sample(.N, sampsize), ]
     } 
     
@@ -48,9 +47,17 @@ estimate_pars <- function(reftable,
                                     paral = paral, 
                                     ncores = ncores)
           out_preds[, c("sim_id", "param") := .(1:.N, par_names[i])]
-
+          
+          out_stats <- predict(par_obs, obs = obs_data, training = reftab_i, 
+                               paral = paral, ncores = ncores,
+                               ntree = ntree)
+          
+          out_stats <- do.call(cbind, (lapply(out_stats, data.table)))
+          setnames(out_stats, c("expectation", "median", "variance", 
+                                "variance_cdf", "quantile_0.025", 
+                                "quantile_0.975", "post_nmae"))
         } else {
-          out_preds <- NULL
+          out_preds <- out_stats <- NULL
         }
         
         err_abcrf <- data.table(err.regAbcrf(par_obj, reftab_i, paral = paral, 
@@ -59,7 +66,8 @@ estimate_pars <- function(reftable,
         var_imp <- par_obj$model.rf$variable.importance
         var_imp <- data.table(setNames(stack(var_imp)[2:1], 
                                        c('summstat','importance')))
-        out <- list(preds = out_preds, err = err_abcrf, var_imp = var_imp)
+        out <- list(preds = out_preds, err = err_abcrf, var_imp = var_imp, 
+                    stats = out_stats)
         invisible(lapply(out, append_col, val = par_names[i], col_name = "param"))
       }
       out

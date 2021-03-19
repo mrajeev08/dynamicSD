@@ -1,6 +1,6 @@
 # Simulate from posteriors ---------
 
-# sub_cmd:=-t 2 -n 21 -jn psim -wt 1m -md \'gdal\' -ar \'1-16\' -cmd \'1e3\'
+# sub_cmd:=-t 2 -n 21 -jn psim -wt 1m -md \'gdal\' -ar \'1-24\' -cmd \'1e3\'
 
 arg <- commandArgs(trailingOnly = TRUE)
 

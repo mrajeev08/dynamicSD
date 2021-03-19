@@ -1,6 +1,6 @@
 # Estimate parameters -----
 
-# sub_cmd:=-t 2 -n 5 -jn est -wt 5m -md \'gdal\' -ar \'1-16\' -sn
+# sub_cmd:=-t 2 -n 5 -jn est -wt 5m -md \'gdal\' -ar \'1-24\' -sn
 
 arg <- commandArgs(trailingOnly = TRUE)
 
