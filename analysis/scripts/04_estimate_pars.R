@@ -44,7 +44,7 @@ load("data/incursions.rda")
 load("data/sd_case_data.rda")
 
 # for getting observed data (just the dummy way) ---
-cand <- fread(fp("analysis/out/fit/candidates.csv"))[1, ]
+cand <- fread(fp("analysis/out/candidates.csv"))[1, ]
 out <- get_sd_pops(sd_shapefile, res_m = 1000,
                    sd_census_data, death_rate_annual = cand$death_rate)
 obs_data <- get_observed_data(sd_case_data, 
@@ -53,13 +53,13 @@ obs_data <- get_observed_data(sd_case_data,
 
 # set up args for array job ---
 mod_ind <- as.numeric(arg[1])
-cands_all <- get_name(fread(fp("analysis/out/fit/candidates.csv")), 
+cands_all <- get_name(fread(fp("analysis/out/candidates.csv")), 
                            root = TRUE)
 cand_now <- unique(cands_all)[mod_ind]
-reftab_list <-  data.table(get_reftab_list(dir = fp("analysis/out/fit")))[root_name %in% cand_now]
-reftl <- read_reftabs(reftab_list, dir = fp("analysis/out/fit"))
+reftab_list <-  data.table(get_reftab_list(dir = fp("analysis/out/abc_sims")))[root_name %in% cand_now]
+reftl <- read_reftabs(reftab_list, dir = fp("analysis/out/abc_sims"))
 
-# Model comparison -----------
+# Param estimation -----------
 param_ests <- estimate_pars(reftable = reftl, 
                             par_names = c("R0", "k", "iota"), 
                             exclude = c("stopped", "sim", "break_threshold"),
@@ -71,7 +71,7 @@ param_ests <- estimate_pars(reftable = reftl,
                             return_training = FALSE)
 
 write_create(param_ests, 
-             fp(paste0("analysis/out/", cand_now, "_param_ests.rds")),
+             fp(paste0("analysis/out/par_ests/", cand_now, "_full_wstops.rds")),
              saveRDS)
 
 param_ests_se <- estimate_par_se(reftable = reftl, 
@@ -86,12 +86,44 @@ param_ests_se <- estimate_par_se(reftable = reftl,
                                   nsims = 3)
 
 write_create(param_ests_se, 
-             fp(paste0("analysis/out/", cand_now, "_param_ests_se.rds")),
+             fp(paste0("analysis/out/par_ests/", cand_now, "_se_wstops.rds")),
+             saveRDS)
+
+# Param estimation without stopped runs ----
+reftl <- reftl[stopped == FALSE]
+
+param_ests <- estimate_pars(reftable = reftl,
+                            par_names = c("R0", "k", "iota"),
+                            exclude = c("stopped", "sim", "break_threshold"),
+                            ncores = set_up$ncores,
+                            paral = TRUE,
+                            obs_data = obs_data,
+                            ntree = 500,
+                            predict = TRUE,
+                            return_training = FALSE)
+
+write_create(param_ests,
+             fp(paste0("analysis/out/par_ests/", cand_now, "_full_nostop.rds")),
+             saveRDS)
+
+param_ests_se <- estimate_par_se(reftable = reftl,
+                                 par_names = c("R0", "k", "iota"),
+                                 exclude = c("stopped", "sim", "break_threshold"),
+                                 ncores = set_up$ncores,
+                                 paral = TRUE,
+                                 obs_data = obs_data,
+                                 ntree = 500,
+                                 predict = TRUE,
+                                 samp_prop = 0.75,
+                                 nsims = 3)
+
+write_create(param_ests_se,
+             fp(paste0("analysis/out/par_ests/", cand_now, "_se_nostops.rds")),
              saveRDS)
 
 # Parse these from subutil for where to put things
-syncto <- "~/Documents/Projects/dynamicSD/analysis/"
-syncfrom <- "mrajeev@della.princeton.edu:/scratch/gpfs/mrajeev/dynamicSD/analysis/out"
+syncto <- "~/Documents/Projects/dynamicSD/analysis/out/"
+syncfrom <- "mrajeev@della.princeton.edu:/scratch/gpfs/mrajeev/dynamicSD/analysis/out/par_ests"
 
 # Close out
 out_session(logfile = set_up$logfile, 

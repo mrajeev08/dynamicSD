@@ -1,36 +1,36 @@
 # Time series from simulations
-ts_stats <- function(names = c("I_dt", "ncells", "tmax", 
-                                "days_in_step", "N_mat", "S_mat"), 
-                      start_date = "2002-01-01") {
+ts_stats <- function(names = c("I_dt", "extra_pars", 
+                               "start_date", "days_in_step")) {
   
   # Get the objects you need from the environment above this one
   list2env(use_mget(names, envir_num = 2), envir = environment())
-
+  
+  obs_data <- extra_pars$obs_data
+  
   # filter I_dt to successful transmission events & detected cases
-  I_dt <- I_dt[infected == TRUE]
+  I_dt <- I_dt[infected & detected]
   
   # aggregate cols by timestep (dates!)
-  I_dt[, date := lubridate::as_date(lubridate::ymd(start_date) + lubridate::duration(t_infectious, "weeks"))]
-  I_dt[, ts_agg := get_timestep(date, 
-                                origin_date = start_date,
-                                date_fun = lubridate::ymd,
-                                days_in_step)]
-
+  I_dt[, date := get_date(origin_date = start_date, 
+                          tstep = t_infectious, 
+                          days_in_step = days_in_step)]
+  I_dt[, cal_month := get_cal_month(date,
+                                    origin_date = start_date)]
+  
   # Summarize monthly cases
-  I_ts <- tabulate(floor(I_dt$ts_agg), length(obs_data$cases_by_month))
-  I_ts_local <- tabulate(floor(I_dt$ts_agg[I_dt$progen_id > 0]), 
-                         length(obs_data$cases_by_month))
-  I_ts_detected <- tabulate(floor(I_dt$ts_agg[I_dt$detected == TRUE]), 
-                            length(obs_data$cases_by_month))
+  cal_month_max <- length(obs_data$cases_by_month)
+  I_ts <- tabulate(I_dt$cal_month, cal_month_max)
   
-  # Summarize susceptibles & total population
-  S <- inds_to_month(colSums(S_mat), nc = ncols_sum)
-  N <- inds_to_month(colSums(N_mat), nc = ncols_sum)
-  cov <- S/N
-  
-  
+  # Summarize monthly introduced cases
+  incs_ts <- tabulate(I_dt$cal_month[I_dt$progen_id == -1], cal_month_max)
+  incs_success <- tabulate(
+    I_dt$cal_month[I_dt$progen_id == -1 & I_dt$id %in% I_dt$progen_id], 
+    cal_month_max)
+    
   # out data.table
-  return(data.table(I_ts, I_ts_local, I_ts_detected))
+  return(data.table(cal_month = seq_len(cal_month_max),
+                    I_ts = I_ts, incs_success = incs_success, 
+                    incs_ts = incs_ts))
   
 }
 
@@ -112,8 +112,12 @@ inc_stats <- function(names = c("I_dt", "ncells", "tmax", "extra_pars",
   mean_dist_8wks_norm <- mean_dist_8wks/mean_dist_all
   
   # temporal loss
-  temp_rmse <- sqrt(mean((I_ts - obs_data$cases_by_month[1:length(I_ts)])^2))
-  temp_loss <- mean(abs(I_ts - obs_data$cases_by_month[1:length(I_ts)]))
+  if(stopped) {
+    I_ts <- sample(I_ts, length(obs_data$cases_by_month), replace = TRUE)
+  }
+  
+  temp_rmse <- sqrt(mean((I_ts - obs_data$cases_by_month)^2))
+  temp_loss <- mean(abs(I_ts - obs_data$cases_by_month))
   
   # spatial loss
   I_cell <- tabulate(I_dt$cell_id, ncells)

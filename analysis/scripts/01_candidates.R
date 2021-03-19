@@ -19,20 +19,22 @@ pars <- data.frame(track = FALSE,
                    I_seeds = 0, 
                    death_rate = 0.48, 
                    days_in_step = 7, 
-                   leave_bounds = TRUE,
                    waning = 1/3,
-                   start_date = "2002-01-01", 
-                   apprx_end_date = "2020-12-31")
+                   start_date = "2002-01-01")
 
 # candidate df to write out
 cand <- tidyr::expand_grid(sequential = c(TRUE, FALSE),
                            by_admin = c(TRUE, FALSE),
                            weights = c(TRUE, FALSE), # if prob get weights for each cell!
                            estincs = c(TRUE, FALSE), 
-                           partition = c(1, 2)) # 32 rows
+                           partition = c(1, 2), 
+                           leave_bounds = c(TRUE, FALSE)) # 32 rows
 cand %<>% 
   mutate(allow_invalid = case_when(weights == TRUE ~ FALSE, 
-                                   weights == FALSE ~ TRUE))
+                                   weights == FALSE ~ TRUE), 
+         apprx_end_date = case_when(estincs == TRUE ~ "2020-12-31", 
+                              estincs == FALSE ~ "2015-12-31"), 
+         exclude = !weights & !leave_bounds)
 
 cand <- cbind(cand, pars)
 
@@ -41,7 +43,7 @@ cand$seed <- sample(1e4, size = nrow(cand), replace = FALSE)
 
 # Output results -----
 write_create(cand,
-             here::here("analysis/out/fit/candidates.csv"),
+             here::here("analysis/out/candidates.csv"),
              fwrite, row.names = FALSE)
 
 # Close out

@@ -7,6 +7,7 @@ run_simrabid <- function(cand,
                          vacc_dt,
                          combine_fun, 
                          summary_fun, 
+                         merge_fun = list,
                          secondary_fun,
                          weight_covars, 
                          weight_params, 
@@ -27,7 +28,6 @@ run_simrabid <- function(cand,
   if(!cand$estincs) {
     
     # add cell ids & timesteps of incursion to parameter defaults
-    # get rid of this once okay
     incursions %<>%
       mutate(cell_id = raster::cellFromXY(mod_specs$rast,
                                           cbind(x_coord, y_coord)), 
@@ -36,15 +36,9 @@ run_simrabid <- function(cand,
                                   date_fun = lubridate::ymd, 
                                   days_in_step = cand$days_in_step))
     
-    mean_per_week <- mean(tabulate(incursions$tstep)) * 2
-    sim_inc_steps <- seq(ceiling(max(incursions$tstep)), start_up$tmax)
-    sim_inc_n <- rpois(length(sim_inc_steps), mean_per_week)
-    tstep_add <- rep(sim_inc_steps, sim_inc_n)
-    cell_ids_add <- sample(start_up$cell_ids, length(tstep_add))
-    
     param_defaults <- c(param_defaults, 
-                        list(cell_ids = c(incursions$cell_id, cell_ids_add), 
-                             tstep = c(incursions$tstep, tstep_add)))
+                        list(cell_ids = incursions$cell_id, 
+                             tstep = incursions$tstep))
   }
   
   if(cand$weights) {
@@ -63,7 +57,6 @@ run_simrabid <- function(cand,
   disp_fn <- ifelse(cand$sequential, simrabid::steps_weibull, simrabid::dispersal_lognorm)
   inc_fn <- ifelse(cand$estincs, simrabid::sim_incursions_pois, simrabid::sim_incursions_hardwired)
   move_fn <- ifelse(cand$weights, simrabid::sim_movement_prob, simrabid::sim_movement_continuous)
-  if(!cand$estincs) priors$iota <- function(n) rep(0, n)
   
   # removing args if they're included in the priors
   param_defaults <- param_defaults[!(names(param_defaults) %in% names(param_ests))]
@@ -134,7 +127,7 @@ run_simrabid <- function(cand,
                                          by_admin = cand$by_admin,
                                          extra_pars = extra_pars)
                     
-                    out <- data.table(simstats, t(pars), sim = j)
+                    out <- merge_fun(simstats, t(pars), sim = j)
                   },
                   error = function(e){
                     # write out the error & the parameter log

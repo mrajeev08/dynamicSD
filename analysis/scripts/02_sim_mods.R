@@ -1,6 +1,6 @@
 # Candidate models (to benchmark) ---------
 
-# sub_cmd:=-t 1 -n 21 -jn sim -wt 1m -md 'gdal' -ar '1-4' -cmd '100'
+# sub_cmd:=-t 12 -n 21 -jn sim -wt 1m -md \'gdal\' -ar \'1-32\' -cmd \'5e4\'
 
 arg <- commandArgs(trailingOnly = TRUE)
 
@@ -29,7 +29,7 @@ library(lubridate)
 
 # set up args
 mod_ind <- as.numeric(arg[1])
-cand <- fread(fp("analysis/out/fit/candidates.csv"))[mod_ind, ]
+cand <- fread(fp("analysis/out/candidates.csv"))[mod_ind, ]
 nsims <- as.numeric(arg[2])
 
 # load in shapefile & other data
@@ -58,8 +58,10 @@ out <- get_sd_pops(sd_shapefile, res_m = 1000,
 
 # Set up priors
 priors <- list(R0 = function(n) exp(rnorm(n, mean = 0.1, sd = 0.2)), # centered around 1.1
-               iota = function(n) exp(rnorm(n, mean = 0.5, sd = 0.5)), # centered around 1.5
-               k = function(n) exp(rnorm(n, mean = 0.5, sd = 0.5))) # uniform
+               iota = function(n) exp(rnorm(n, mean = 0.5, sd = 0.25)), # centered around 2
+               k = function(n) exp(rnorm(n, mean = 0.1, sd = 0.5))) # uniform
+
+if(!cand$estincs) priors$iota <- function(n) rep(0, n)
 
 # get observed data
 obs_data <- get_observed_data(sd_case_data, 
@@ -79,7 +81,7 @@ out_sims <- run_simrabid(cand = cand,
                          weight_covars = list(0), 
                          weight_params = list(0))  
 
-file_out <- paste0("analysis/out/fit/", get_name(cand), ".csv")
+file_out <- paste0("analysis/out/abc_sims/", get_name(cand), ".csv")
 
 
 write_create(out_sims,
@@ -89,7 +91,7 @@ write_create(out_sims,
 
 # Parse these from subutil for where to put things
 syncto <- "~/Documents/Projects/dynamicSD/analysis/out/"
-syncfrom <- "mrajeev@della.princeton.edu:/scratch/gpfs/mrajeev/dynamicSD/analysis/out/fit"
+syncfrom <- "mrajeev@della.princeton.edu:/scratch/gpfs/mrajeev/dynamicSD/analysis/out/abc_sims"
 
 # Close out
 out_session(logfile = set_up$logfile, start = set_up$start, ncores = set_up$ncores)

@@ -1,7 +1,7 @@
-get_reftab_list <- function(dir = "analysis/out/fit") {
+get_reftab_list <- function(dir = "analysis/out/abc_sims") {
 
   reftabs <- list.files(dir)
-  reftabs <- data.frame(fnames = reftabs[-grep("candidates", reftabs)])
+  reftabs <- data.frame(fnames = reftabs)
   reftabs %<>%
     tidyr::separate(fnames, into = c("scale", "move", "incs", 
                                "kern", "seed", 
@@ -11,7 +11,7 @@ get_reftab_list <- function(dir = "analysis/out/fit") {
   return(reftabs)
 }
 
-read_reftabs <- function(reftab_list, dir = "analysis/out/fit") {
+read_reftabs <- function(reftab_list, dir = "analysis/out/abc_sims") {
   
   reftl <- mapply(
     function(x, y) {
@@ -51,9 +51,7 @@ compare_mods <- function(reftable,
   }
   
   if(sampsize < nrow(reftable)) {
-    # this will error if group sizes are not balanced!
-    reftab <- reftab[reftab[, .I[sample(.N, sampsize/length(group_list))], 
-                            by = modindex][[2]]]
+    reftab <- reftab[sample(.N, sampsize)]
   } 
   
   modlookup <- data.table(unique.array(reftab[, c("modname", "modindex")]))
@@ -78,14 +76,13 @@ compare_mods <- function(reftable,
     mod_predicted <- predict(mod_comp, obs_data, reftab, 
                              paral = paral, ncores = ncores, ntree = ntree)
     
-    projobs <- data.table(predict(mod_comp$model.lda, obs_data)$x)
-    projobs[, c("type", 
+    lda_obs <- data.table(predict(mod_comp$model.lda, obs_data)$x)
+    lda_obs[, c("type", 
                 "modindex", 
                 "post_prob") := .("observed", 
                                   mod_predicted$allocation, 
                                   mod_predicted$post.prob)]
     
-    lda_predicted <- rbind(lda_predicted, projobs)
     mod_predicted <- data.table(modindex = colnames(mod_predicted$vote), 
                                 votes = t(mod_predicted$vote))
 
@@ -109,6 +106,7 @@ compare_mods <- function(reftable,
               var_imp = var_imp,
               mod_predicted = mod_predicted, 
               lda_predicted = lda_predicted, 
+              lda_obs = lda_obs,
               modlookup = modlookup))
   
 }

@@ -10,7 +10,9 @@ get_observed_data <- function(sd_case_data, cand, out) {
   
   # actual end date (to ensure same number of days in each timestep)
   end_date <- lubridate::ymd(start_date) + tmax * days_in_step
-  
+  end_month <- get_timestep(end_date, origin_date = start_date, 
+                            date_fun = lubridate::ymd, 
+                            days_in_step = 30.5)
   sd_case_data %<>%
     mutate(t_infectious = get_timestep(symptoms_started, 
                                        origin_date = start_date, 
@@ -24,7 +26,7 @@ get_observed_data <- function(sd_case_data, cand, out) {
            infected = TRUE, detected = TRUE) 
   
   # cases by month & cell
-  cases_by_month <- tabulate(sd_case_data$month, nbins = max(sd_case_data$month))
+  cases_by_month <- tabulate(sd_case_data$month, nbins = end_month)
   cases_by_cell <- tabulate(sd_case_data$cell_id, nbins = ncell(out$rast))
 
   # set-up for input into summ_stats

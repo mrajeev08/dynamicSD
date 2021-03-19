@@ -13,6 +13,14 @@ get_date <- function(origin_date = "2002-01-01",
   
 }
 
+get_cal_month <- function(date, origin_date = "2002-01-01", 
+                          date_fun = lubridate::ymd) {
+  
+  mbase <- (lubridate::year(date_fun(date)) - lubridate::year(date_fun(origin_date))) * 12 
+  madd <- lubridate::month(date_fun(date))
+  mbase + madd
+}
+
 # getting cellid of raster based on utm coords
 # so as not have to match names!
 #' @importFrom  data.table .
