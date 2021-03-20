@@ -12,7 +12,8 @@ run_simrabid <- function(cand,
                          weight_covars, 
                          weight_params, 
                          multi = FALSE, 
-                         convolve_steps = TRUE) {
+                         convolve_steps = TRUE, 
+                         sim_vacc = FALSE) {
   
   
   start_up <- setup_sim(start_date = cand$start_date, 
@@ -111,6 +112,16 @@ run_simrabid <- function(cand,
               out <- 
                 tryCatch(
                   expr = {
+                    
+                    
+                    if(sim_vacc) {
+                      
+                      vacc_dt <- sim_campaigns(locs = seq_len(max(start_up$admin_ids, na.rm = TRUE)),
+                                               campaign_prob = vacc_dt$vacc_prop, 
+                                               coverage = vacc_dt$vacc_cov, sim_years = 10, 
+                                               burn_in_years = 5)
+                    }
+                    
                     simstats <- simrabid(start_up, 
                                          start_vacc = cand$start_vacc, 
                                          I_seeds = cand$I_seeds, 
@@ -132,7 +143,7 @@ run_simrabid <- function(cand,
                                          track = cand$track,
                                          weights = weights, 
                                          row_probs = NULL,
-                                         coverage = FALSE,
+                                         coverage = sim_vacc,
                                          break_threshold = cand$break_threshold,
                                          by_admin = cand$by_admin,
                                          extra_pars = extra_pars)

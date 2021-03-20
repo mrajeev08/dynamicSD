@@ -1,6 +1,6 @@
 # Random Forest ABC: Model choice -------
 
-# sub_cmd:=-t 12 -n 12 -jn comp -wt 10m -md \"gdal\" -sn -@ -mem 4500
+# sub_cmd:=-t 12 -n 12 -jn comp -wt 10m -md \"gdal\" -sn -@ -mem 8000
 
 # Set up on cluster ------
 source("R/utils.R")
@@ -52,71 +52,45 @@ obs_data <- get_observed_data(sd_case_data,
 reftab_list <-  get_reftab_list(dir = fp("analysis/out/abc_sims"))
 reftl <- read_reftabs(reftab_list, dir = fp("analysis/out/abc_sims"))
 
-# fewer sims necessary for model comparison here lets do about 1/4
-set.seed(cand$seed)
-reftl <- reftl[sample(.N, 1e5 * 24 / 4)] # for 25k simulations per model
+# do a foreach (do loop here) 
+scale <- c("grid", "vill")
 
-mod_comp <- compare_mods(reftable = reftl, 
-                         par_names = c("R0", "k", "iota"), 
-                         exclude = c("stopped", "sim", "break_threshold"),
-                         obs_data = obs_data, 
-                         ntree = 500, 
-                         ncores = set_up$ncores, 
-                         paral = TRUE,
-                         predict = TRUE, 
-                         return_training = FALSE)
-
-write_create(mod_comp, 
-             fp("analysis/out/mod_comp/full_wstops.rds"),
-             saveRDS)
-
-mod_comp_se <- compare_mod_se(reftable = reftl, 
-                              par_names = c("R0", "k", "iota"), 
-                              exclude = c("stopped", "sim", "break_threshold"),
-                              obs_data = obs_data, 
-                              samp_prop = 0.75, 
-                              nsims = 3, 
-                              ntree = 500, 
-                              ncores = set_up$ncores, 
-                              paral = TRUE, 
-                              predict = TRUE,
-                              return_training = FALSE) 
-
-write_create(mod_comp_se, 
-             fp("analysis/out/mod_comp/se_wstops.rds"),
-             saveRDS)
-
-# Filtering to ones that didn't get stopped -----
-reftl <- reftl[stopped == FALSE]
-
-mod_comp <- compare_mods(reftable = reftl, 
-                         par_names = c("R0", "k", "iota"), 
-                         exclude = c("stopped", "sim", "break_threshold"),
-                         obs_data = obs_data, 
-                         ntree = 500, 
-                         ncores = set_up$ncores, 
-                         paral = TRUE,
-                         predict = TRUE, 
-                         return_training = FALSE)
-write_create(mod_comp, 
-             fp("analysis/out/mod_comp/full_nostops.rds"),
-             saveRDS)
-
-mod_comp_se <- compare_mod_se(reftable = reftl, 
-                              par_names = c("R0", "k", "iota"), 
-                              exclude = c("stopped", "sim", "break_threshold"),
-                              obs_data = obs_data, 
-                              samp_prop = 0.75, 
-                              nsims = 3, 
-                              ntree = 500, 
-                              ncores = set_up$ncores, 
-                              paral = TRUE, 
-                              predict = TRUE,
-                              return_training = FALSE) 
-write_create(mod_comp_se, 
-             fp("analysis/out/mod_comp/se_nostops.rds"),
-             saveRDS)
-
+foreach(i = seq_len(length(scale))) %do% {
+  
+  reftl_now <- reftl[grep(scale[i], modname)]
+  mod_comp <- compare_mods(reftable = reftl_now, 
+                           par_names = c("R0", "k", "iota"), 
+                           exclude = c("stopped", "sim", "break_threshold",
+                                       "prop_start_pop"),
+                           obs_data = obs_data, 
+                           ntree = 500, 
+                           ncores = set_up$ncores, 
+                           paral = TRUE,
+                           predict = TRUE, 
+                           return_training = FALSE)
+  
+  write_create(mod_comp, 
+               fp(paste0("analysis/out/mod_comp/full_", scale[i], ".rds")),
+               saveRDS)
+  
+  mod_comp <- compare_mod_se(reftable = reftl_now, 
+                                par_names = c("R0", "k", "iota"), 
+                                exclude = c("stopped", "sim", "break_threshold", 
+                                            "prop_start_pop"),
+                                obs_data = obs_data, 
+                                samp_prop = 0.5, 
+                                nsims = 3, 
+                                ntree = 500, 
+                                ncores = set_up$ncores, 
+                                paral = TRUE, 
+                                predict = TRUE,
+                                return_training = FALSE) 
+  write_create(mod_comp, 
+               fp(paste0("analysis/out/mod_comp/full_", scale[i], ".rds")),
+               saveRDS)
+  
+  print("Done")
+}
 
 # Parse these from subutil for where to put things
 syncto <- "~/Documents/Projects/dynamicSD/analysis/out/"

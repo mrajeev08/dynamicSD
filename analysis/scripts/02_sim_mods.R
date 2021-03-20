@@ -57,7 +57,7 @@ out <- get_sd_pops(sd_shapefile, res_m = 1000,
                    sd_census_data, death_rate_annual = cand$death_rate)
 
 # Set up priors from hampson et al. 2009
-priors <- list(R0 = function(n) exp(rnorm(n, mean = 0.1, sd = 0.2)), # centered around 1.1
+priors <- list(R0 = function(n) exp(rnorm(n, mean = 0.2, sd = 0.2)), # centered around 1.2
                iota = function(n) exp(rnorm(n, mean = 0, sd = 0.5)), # centered around 1 / week
                k = function(n) exp(rnorm(n, mean = 0.25, sd = 0.5))) # centered around 1.3 
 

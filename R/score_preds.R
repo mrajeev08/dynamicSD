@@ -16,22 +16,18 @@ get_tempstats <- function(out, obs_data, quants = c(0.5, 0.9),
                                  nsamp = nsamp, 
                                  ncurves = ncurves)
   
-  best_sims <- mapply(get_repsims, 
-                      preds_dt = list(out_sims),
-                      curve_scores = list(curve_scores),
-                      type = c("all", "times"),
-                      n = nbest, 
-                      SIMPLIFY = FALSE)
+  best_sims <- get_repsims(preds_dt = out_sims,
+                           curve_scores = curve_scores,
+                           type = c("all", "times"),
+                           n = nbest)
 
-  envelopes <- mapply(get_envelope, 
-                      type = c("all", "times"),
-                      quantile = quants,
-                      preds_dt = list(out_sims),
-                      curve_scores = list(curve_scores), 
-                      SIMPLIFY = FALSE)
-  
-  out_dts <- Reduce(function(...) merge(..., all = TRUE), 
-                    c(envelopes, best_sims))
+  envelopes <- get_envelope(preds_dt = out_sims, 
+                            curve_scores = curve_scores, 
+                            quantile = quants, 
+                            type = c("all", "times"))
+                                        
+  out_dts <- cbind(envelopes, best_sims)
+
   if(!is.null(obs_data)) {
     
     scores <- as.data.table(lapply(list(crps_sample, 
@@ -50,38 +46,51 @@ get_tempstats <- function(out, obs_data, quants = c(0.5, 0.9),
     scores <- NULL
   }
   
-  cbind(out_dts, stats, scores)
+  return(list(ts_scores = cbind(cal_month = seq_len(nrow(out_dts)), 
+                                out_dts, stats, scores), 
+              curve_scores = curve_scores))
 
 }
 
 get_repsims <- function(preds_dt, curve_scores, 
                          n = 5,
                          type = c("all", "times")) {
-  type <- match.arg(type)
-  curve_scores[, score := get(paste("score", type, sep = "_"))]
-  setorder(curve_scores, score)
-  sims_in <- curve_scores$sim[1:n]
-  sims_out <- dcast(preds_dt[sim %in% sims_in], 
-                        cal_month ~ sim, value.var = "I_ts")
-  setnames(sims_out, 2:(n + 1), paste("best", type, 1:n, sep = "_"))
   
+  out <-
+    foreach(k = seq_len(length(type)), .combine = cbind) %dopar% {
+      curve_scores[, score := get(paste("score", type[k], sep = "_"))]
+      setorder(curve_scores, score)
+      sims_in <- curve_scores$sim[1:n]
+      sims_out <- dcast(preds_dt[sim %in% sims_in], 
+                            cal_month ~ sim, value.var = "I_ts")
+      setnames(sims_out, 2:(n + 1), paste("best", type[k], 1:n, sep = "_"))
+      sims_out[, !c("cal_month")]
+    }
+  
+  return(out)
 }
 
-get_envelope <- function(preds_dt, curve_scores, quantile= 0.75, 
+get_envelope <- function(preds_dt, curve_scores, quantile = 0.75, 
                          type = c("all", "times")) {
   
-  # sort sims by scores
-  type <- match.arg(type)
-  curve_scores[, score := get(paste("score", type, sep = "_"))]
-  setorder(curve_scores, score)
-  thresh_ind <- round(max(curve_scores$sim)*quantile)
-  sims_in <- curve_scores$sim[1:thresh_ind]
-  env_all <- preds_dt[sim %in% sims_in][, .(min = min(I_ts),
-                                             max = max(I_ts)), 
-                                        by = cal_month]
-  setnames(env_all, c("min", "max"), 
-           paste(c("min", "max"), type, quantile, sep = "_"))
-
+  env_all <- 
+    foreach(k = seq_len(length(type)), .combine = cbind) %:% 
+      foreach(i = seq_len(length(quantile)), .combine = cbind) %dopar% {
+        
+        # sort sims by scores
+        curve_scores[, score := get(paste("score", type[k], sep = "_"))]
+        setorder(curve_scores, score)
+        
+        thresh_ind <- round(max(curve_scores$sim)*quantile[i])
+        sims_in <- curve_scores$sim[1:thresh_ind]
+        env_all <- preds_dt[sim %in% sims_in][, .(min = min(I_ts),
+                                                  max = max(I_ts)), 
+                                              by = cal_month]
+        setnames(env_all, c("min", "max"), 
+                 paste(c("min", "max"), type[k], quantile[i], sep = "_"))
+        env_all[, !c("cal_month")]
+      } 
+    
   
   return(env_all)
   

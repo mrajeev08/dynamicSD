@@ -52,7 +52,8 @@ source("R/score_preds.R")
 cands_all <- fread(fp("analysis/out/candidates.csv"))
 cands_all$name <- get_name(cands_all, root = TRUE)
 cand_now <- unique(cands_all$name)[mod_ind]
-cand <- cands_all[name == cand_now][1, ]
+# just take the first partition row as these are duplicated
+cand <- cands_all[name == cand_now][1, ] 
 
 # get the startup space
 out <- get_sd_pops(sd_shapefile, res_m = 1000,
@@ -62,7 +63,7 @@ out <- get_sd_pops(sd_shapefile, res_m = 1000,
 post_list <- list.files(fp("analysis/out/par_ests/"))
 
 post_full <- post_list[grep(cand_now, post_list)]
-post_full <- post_full[grep("full", post_full)][1]
+post_full <- post_full[grep("full", post_full)]
 post_full <- readRDS(fp(paste0("analysis/out/par_ests/", post_full)))$preds
 inds_joint <- post_full[, .(check = all(V1 > 0)), by = "sim_id"][check == TRUE]
 post_joint <-  post_full[sim_id %in% inds_joint$sim_id]
@@ -78,27 +79,8 @@ sd_vill_pop <- data.table(pop = out$start_pop,
                           vacc_locs = out$rast[])[, .(pop = sum(pop, na.rm = TRUE)),
                                                   by = "vacc_locs"][!is.na(vacc_locs)]
 
-# District level vacc
-vacc_dt_dist <- vacc_dt[, .(vacc_locs = sample(sd_vill_pop$vacc_locs,
-                            size = sum(vacc_est), 
-                            prob = sd_vill_pop$pop, replace = TRUE)), 
-                        by = "vacc_times"]
-vacc_dt_dist <- vacc_dt_dist[, .(vacc_est = .N), by = c("vacc_locs", "vacc_times")]
-
-# Roll it up again
-vacc_dt_dist %>%
-  arrange(vacc_locs, vacc_times) %>%
-  mutate(window = vacc_times - dplyr::lag(vacc_times, 1),
-         group = if_else(window <= 6 & !is.na(window), 0, 1),
-         group = cumsum(group)) %>%
-  group_by(vacc_locs, group) %>%
-  mutate(vacc_times = min(vacc_times)) %>%
-  group_by(vacc_locs, vacc_times) %>%
-  summarize(vacc_est = sum(vacc_est)) %>%
-  as.data.table() -> vacc_dt_dist
-
 # loop list
-vacc_loop <- list(vill_vacc = vacc_dt, endemic = endemic, dist_vacc = vacc_dt_dist)
+vacc_loop <- list(vill_vacc = vacc_dt, endemic = endemic)
 
 # get observed data ----
 sd_case_data %>%
@@ -115,12 +97,12 @@ out_post_sims <-
     foreach(j = seq_len(length(post_loop)), 
             .combine = comb, .multicombine = TRUE) %do% {
       
-      # sample from posteriors
+      # posteriors
       posts <- post_loop[[j]]
-      set.seed(cand$seed)
+      set.seed(cand$seed) # same posteriors by candidate
       posts <- posts[, sample(resp, nsims, prob = V1, replace = TRUE), by = "param"]
       posts <- split(posts$V1, posts$param)
-      
+        
       outs <- run_simrabid(cand = cand, 
                            mod_specs = out,
                            param_ests = posts,
@@ -138,12 +120,13 @@ out_post_sims <-
       
       out_scores <- get_tempstats(outs, obs_data, quants = c(0.5, 0.9), 
                                   nsamp = 100, ncurves = 100, nbest = 5)
+      curve_scores <- out_scores$curve_scores
+      out_scores <- out_scores$ts_scores
+      outs$modname <- out_scores$modname <- curve_scores$modname <- cand_now
+      outs$vacc_type <- out_scores$vacc_type <- curve_scores$vacc_type <- names(vacc_loop)[i]
+      outs$post_type <- out_scores$post_type <- curve_scores$vacc_type <- names(post_loop)[j]
       
-      outs$modname <- out_scores$modname <- cand_now
-      outs$vacc_type <- out_scores$vacc_type <- names(vacc_loop)[i]
-      outs$post_type <- out_scores$post_type <- names(post_loop)[j]
-      
-      list(sims = outs, scores = out_scores)
+      list(sims = outs, scores = out_scores, curve_scores = curve_scores)
     }
  
 # Write out results & close ----
@@ -155,9 +138,12 @@ write_create(out_post_sims$sims,
              data.table::fwrite)
 
 write_create(out_post_sims$scores,
-             fp(paste0(file_pref, cand_now, "_scores.csv")),
+             fp(paste0(file_pref, cand_now, "_ts_scores.csv")),
              data.table::fwrite)
 
+write_create(out_post_sims$curve_scores,
+             fp(paste0(file_pref, cand_now, "_curve_scores.csv")),
+             data.table::fwrite)
 
 # Parse these from subutil for where to put things
 syncto <- "~/Documents/Projects/dynamicSD/analysis/out/"

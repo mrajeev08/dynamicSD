@@ -1,7 +1,9 @@
 # Time series from simulations
 ts_stats <- function(names = c("I_dt", "extra_pars", 
                                "start_date", "days_in_step", 
-                               "S_mat", "N_mat")) {
+                               "S_mat", "N_mat",
+                               "prop_start_pop", 
+                               "break_threshold")) {
   
   # Get the objects you need from the environment above this one
   list2env(use_mget(names, envir_num = 2), envir = environment())
@@ -37,11 +39,14 @@ ts_stats <- function(names = c("I_dt", "extra_pars",
   incs_success <- tabulate(
     I_dt$cal_month[I_dt$progen_id == -1 & I_dt$id %in% I_dt$progen_id], 
     cal_month_max)
-    
+  
+  stopped <- prop_start_pop < break_threshold
+  
   # out data.table
   return(data.table(cal_month = seq_len(cal_month_max),
                     I_ts = I_ts, incs_success = incs_success, 
-                    incs_ts = incs_ts, cov = cov, S = S, N = N))
+                    incs_ts = incs_ts, cov = cov, S = S, N = N,
+                    stopped = stopped))
   
 }
 
