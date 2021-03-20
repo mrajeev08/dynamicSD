@@ -1,6 +1,7 @@
 # Time series from simulations
 ts_stats <- function(names = c("I_dt", "extra_pars", 
-                               "start_date", "days_in_step")) {
+                               "start_date", "days_in_step", 
+                               "S_mat", "N_mat")) {
   
   # Get the objects you need from the environment above this one
   list2env(use_mget(names, envir_num = 2), envir = environment())
@@ -21,6 +22,16 @@ ts_stats <- function(names = c("I_dt", "extra_pars",
   cal_month_max <- length(obs_data$cases_by_month)
   I_ts <- tabulate(I_dt$cal_month, cal_month_max)
   
+  # Summarize S/N monthly (@ district level)
+  ts_dates <- get_date(origin_date = start_date, 
+                       tstep = 1:ncol(S_mat), 
+                       days_in_step = days_in_step)
+  ts_months <- get_cal_month(ts_dates, origin_date = start_date)
+  ts_select <- match(seq_len(cal_month_max), ts_months)
+  S <- colSums(S_mat)[ts_select]
+  N <- colSums(N_mat)[ts_select]
+  cov <- S/N # rough estimate
+  
   # Summarize monthly introduced cases
   incs_ts <- tabulate(I_dt$cal_month[I_dt$progen_id == -1], cal_month_max)
   incs_success <- tabulate(
@@ -30,7 +41,7 @@ ts_stats <- function(names = c("I_dt", "extra_pars",
   # out data.table
   return(data.table(cal_month = seq_len(cal_month_max),
                     I_ts = I_ts, incs_success = incs_success, 
-                    incs_ts = incs_ts))
+                    incs_ts = incs_ts, cov = cov, S = S, N = N))
   
 }
 

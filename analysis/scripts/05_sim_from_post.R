@@ -8,6 +8,10 @@ arg <- commandArgs(trailingOnly = TRUE)
 source("R/utils.R")
 set_up <- setup_cl(mpi = TRUE)
 
+# set up args and cluster if applicable ----
+mod_ind <- ifelse(!set_up$slurm, 1, as.numeric(arg[1]))
+nsims <- ifelse(!set_up$slurm, 5, as.numeric(arg[2]))
+
 cl <- make_cl(set_up$ncores)
 register_cl(cl)
 print(paste("Cluster size:", cl_size(cl)))
@@ -44,10 +48,7 @@ source("R/summ_stats.R")
 source("R/run_mods.R")
 source("R/score_preds.R")
 
-# set up args and cand ----
-mod_ind <- as.numeric(arg[1])
-nsims <- as.numeric(arg[2])
-
+# candidate model to run ----
 cands_all <- fread(fp("analysis/out/candidates.csv"))
 cands_all$name <- get_name(cands_all, root = TRUE)
 cand_now <- unique(cands_all$name)[mod_ind]
@@ -84,6 +85,18 @@ vacc_dt_dist <- vacc_dt[, .(vacc_locs = sample(sd_vill_pop$vacc_locs,
                         by = "vacc_times"]
 vacc_dt_dist <- vacc_dt_dist[, .(vacc_est = .N), by = c("vacc_locs", "vacc_times")]
 
+# Roll it up again
+vacc_dt_dist %>%
+  arrange(vacc_locs, vacc_times) %>%
+  mutate(window = vacc_times - dplyr::lag(vacc_times, 1),
+         group = if_else(window <= 6 & !is.na(window), 0, 1),
+         group = cumsum(group)) %>%
+  group_by(vacc_locs, group) %>%
+  mutate(vacc_times = min(vacc_times)) %>%
+  group_by(vacc_locs, vacc_times) %>%
+  summarize(vacc_est = sum(vacc_est)) %>%
+  as.data.table() -> vacc_dt_dist
+
 # loop list
 vacc_loop <- list(vill_vacc = vacc_dt, endemic = endemic, dist_vacc = vacc_dt_dist)
 
@@ -109,19 +122,19 @@ out_post_sims <-
       posts <- split(posts$V1, posts$param)
       
       outs <- run_simrabid(cand = cand, 
-                               mod_specs = out,
-                               param_ests = posts,
-                               param_defaults = param_defaults,
-                               nsims = nsims, 
-                               extra_pars = list(obs_data = obs_data),
-                               vacc_dt = vacc_loop[[i]],
-                               combine_fun = 'rbind', 
-                               summary_fun = ts_stats, 
-                               merge_fun = data.table, 
-                               secondary_fun = nbinom_constrained,
-                               weight_covars = list(0), 
-                               weight_params = list(0), 
-                               multi = FALSE) 
+                           mod_specs = out,
+                           param_ests = posts,
+                           param_defaults = param_defaults,
+                           nsims = nsims, 
+                           extra_pars = list(obs_data = obs_data),
+                           vacc_dt = vacc_loop[[i]],
+                           combine_fun = 'rbind', 
+                           summary_fun = ts_stats, 
+                           merge_fun = data.table, 
+                           secondary_fun = nbinom_constrained,
+                           weight_covars = list(0), 
+                           weight_params = list(0), 
+                           multi = FALSE) 
       
       out_scores <- get_tempstats(outs, obs_data, quants = c(0.5, 0.9), 
                                   nsamp = 100, ncurves = 100, nbest = 5)

@@ -1,6 +1,6 @@
 # Random Forest ABC: Model choice -------
 
-# sub_cmd:=-t 12 -n 12 -jn comp -wt 10m -md \"gdal\" -sn -@ -mem 5000
+# sub_cmd:=-t 12 -n 12 -jn comp -wt 10m -md \"gdal\" -sn -@ -mem 4500
 
 # Set up on cluster ------
 source("R/utils.R")
@@ -52,6 +52,10 @@ obs_data <- get_observed_data(sd_case_data,
 reftab_list <-  get_reftab_list(dir = fp("analysis/out/abc_sims"))
 reftl <- read_reftabs(reftab_list, dir = fp("analysis/out/abc_sims"))
 
+# fewer sims necessary for model comparison here lets do about 1/4
+set.seed(cand$seed)
+reftl <- reftl[sample(.N, 1e5 * 24 / 4)] # for 25k simulations per model
+
 mod_comp <- compare_mods(reftable = reftl, 
                          par_names = c("R0", "k", "iota"), 
                          exclude = c("stopped", "sim", "break_threshold"),
@@ -102,7 +106,7 @@ mod_comp_se <- compare_mod_se(reftable = reftl,
                               par_names = c("R0", "k", "iota"), 
                               exclude = c("stopped", "sim", "break_threshold"),
                               obs_data = obs_data, 
-                              samp_prop = 0.5, 
+                              samp_prop = 0.75, 
                               nsims = 3, 
                               ntree = 500, 
                               ncores = set_up$ncores, 

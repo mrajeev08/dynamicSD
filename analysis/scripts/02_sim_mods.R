@@ -1,6 +1,6 @@
 # Candidate models (to benchmark) ---------
 
-# sub_cmd:=-t 12 -n 21 -jn sim -wt 1m -md \'gdal\' -ar \'1-48\' -cmd \'1e3\'
+# sub_cmd:=-t 12 -n 21 -jn sim -wt 1m -md \'gdal\' -ar \'1-48\' -cmd \'5e4\'
 
 arg <- commandArgs(trailingOnly = TRUE)
 
@@ -77,6 +77,7 @@ out_sims <- run_simrabid(cand = cand,
                          vacc_dt = vacc_dt,
                          combine_fun = 'rbind', 
                          summary_fun = inc_stats, 
+                         merge_fun = data.table,
                          secondary_fun = nbinom_constrained,
                          weight_covars = list(0), 
                          weight_params = list(0))  

@@ -26,17 +26,10 @@ estimate_pars <- function(reftable,
     out <- 
       foreach(i = seq_len(length(par_names)), .combine = comb, 
             .multicombine = TRUE) %do% {
-      
-      
-      if(!par_names[i] %in% names(reftab)) {
-        
-        out <- NULL
-        
-      } else {
         
         reftab_i <- reftab[, !par_names[-i], with = FALSE]
         setnames(reftab_i, par_names[i], "par")
-
+        
         par_obj <- regAbcrf(par~., data = reftab_i, ntree = ntree, 
                             paral = paral, ncores = ncores)
         
@@ -48,7 +41,8 @@ estimate_pars <- function(reftable,
                                     ncores = ncores)
           out_preds[, c("sim_id", "param") := .(1:.N, par_names[i])]
           
-          out_stats <- predict(par_obs, obs = obs_data, training = reftab_i, 
+          out_stats <- predict(par_obj, obs = obs_data, 
+                               training = reftab_i, 
                                paral = paral, ncores = ncores,
                                ntree = ntree)
           
@@ -61,7 +55,7 @@ estimate_pars <- function(reftable,
         }
         
         err_abcrf <- data.table(err.regAbcrf(par_obj, reftab_i, paral = paral, 
-                                          ncores = ncores))
+                                             ncores = ncores))
         
         var_imp <- par_obj$model.rf$variable.importance
         var_imp <- data.table(setNames(stack(var_imp)[2:1], 
@@ -69,11 +63,10 @@ estimate_pars <- function(reftable,
         out <- list(preds = out_preds, err = err_abcrf, var_imp = var_imp, 
                     stats = out_stats)
         invisible(lapply(out, append_col, val = par_names[i], col_name = "param"))
+        out
       }
-      out
-    }
     
-   lapply(out, append_col, val = modname, col_name = "modname")
+    lapply(out, append_col, val = modname, col_name = "modname")
     
     if(return_training) {
       return(list(out = out, training = training))
