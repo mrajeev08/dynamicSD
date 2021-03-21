@@ -117,26 +117,26 @@ run_simrabid <- function(cand,
                   expr = {
                     
                     if(sim_vacc == "fixed") {
-                      
+                     
                       # same vills for each sim
                       max_id <- max(start_up$loc_ids)
                       set.seed(cand$seed * j)
-                      locs <- seq_len(max_id)[rbinom(max_id, size = 1, prob = vacc_dt$vacc_prop)]
+                      locs <- seq_len(max_id)[rbinom(max_id, size = 1, prob = vacc_dt$vacc_prop) == 1]
                       vacc_dt_i <- sim_campaigns(locs = locs,
-                                               campaign_prob = 1, 
-                                               coverage = vacc_dt$vacc_cov, 
-                                               sim_years = vacc_dt$years, 
-                                               burn_in_years = vacc_dt$burn_in) 
+                                                 campaign_prob = 1, 
+                                                 coverage = vacc_dt$vacc_cov, 
+                                                 sim_years = vacc_dt$years, 
+                                                 burn_in_years = vacc_dt$burn_in) 
                       cover <- TRUE
                     }
                     
                     if(sim_vacc == "random") {
                       
                       vacc_dt_i <- sim_campaigns(locs = seq_len(max(start_up$loc_ids)),
-                                               campaign_prob = vacc_dt$vacc_prop, 
-                                               coverage = vacc_dt$vacc_cov, 
-                                               sim_years = vacc_dt$years, 
-                                               burn_in_years = vacc_dt$burn_in)
+                                                 campaign_prob = vacc_dt$vacc_prop, 
+                                                 coverage = vacc_dt$vacc_cov, 
+                                                 sim_years = vacc_dt$years, 
+                                                 burn_in_years = vacc_dt$burn_in)
                       cover <- TRUE
                       
                     }

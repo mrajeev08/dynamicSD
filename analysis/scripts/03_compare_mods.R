@@ -73,22 +73,22 @@ foreach(i = seq_len(length(scale))) %do% {
                fp(paste0("analysis/out/mod_comp/full_", scale[i], ".rds")),
                saveRDS)
   
-  # mod_comp <- compare_mod_se(reftable = reftl_now, 
-  #                               par_names = c("R0", "k", "iota"), 
-  #                               exclude = c("stopped", "sim", "break_threshold", 
-  #                                           "prop_start_pop"),
-  #                               obs_data = obs_data, 
-  #                               samp_prop = 0.5, 
-  #                               nsims = 3, 
-  #                               ntree = 500, 
-  #                               ncores = set_up$ncores, 
-  #                               paral = TRUE, 
-  #                               predict = TRUE,
-  #                               return_training = FALSE) 
-  # write_create(mod_comp, 
-  #              fp(paste0("analysis/out/mod_comp/se_", scale[i], ".rds")),
-  #              saveRDS)
-  
+  mod_comp <- compare_mod_se(reftable = reftl_now,
+                                par_names = c("R0", "k", "iota"),
+                                exclude = c("stopped", "sim", "break_threshold",
+                                            "prop_start_pop"),
+                                obs_data = obs_data,
+                                samp_prop = 0.75,
+                                nsims = 3,
+                                ntree = 500,
+                                ncores = set_up$ncores,
+                                paral = TRUE,
+                                predict = TRUE,
+                                return_training = FALSE)
+  write_create(mod_comp,
+               fp(paste0("analysis/out/mod_comp/se_", scale[i], ".rds")),
+               saveRDS)
+
   print("Done")
 }
 

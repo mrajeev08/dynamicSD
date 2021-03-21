@@ -41,7 +41,8 @@ get_tempstats <- function(out, obs_data, quants = c(0.5, 0.9),
     scores[, paste0("best_dat_", 1:nbest) := rank_sims(obs_data, 
                                                         preds, 
                                                         n = nbest)]
-    
+    curve_scores$rank_rmse <- colSums(sqrt(apply(preds, 2, 
+                                      function(x) x - obs_data$cases_by_month)^2))/nrow(preds)
   } else {
     scores <- NULL
   }
@@ -115,7 +116,7 @@ get_centrality <- function(preds_dt, nsamp = 100, ncurves = 100) {
                     all = all(I_ts <= max & I_ts >= min)), by = sim]
   }
   
-  out[, .(score_all = sum(within), score_times = sum(all)), by = sim]
+  out[, .(score_times = sum(within), score_all = sum(all)), by = sim]
 
   
 }

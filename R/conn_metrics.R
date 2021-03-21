@@ -61,12 +61,13 @@ conn_stats <- function(names = c("I_dt", "extra_pars",
   }
   
   # village stats
-  vill_mat_V <- data.table(loc_ids, V_mat)[, sum(.SD), by = "loc_ids"]
-  vill_mat_N <- data.table(loc_ids, N_mat)[, sum(.SD), by = "loc_ids"]
+  vill_mat_V <- data.table(loc_ids, V_mat)[, lapply(.SD, sum), by = "loc_ids"]
+  vill_mat_N <- data.table(loc_ids, N_mat)[, lapply(.SD, sum), by = "loc_ids"]
+  loc_ids <- vill_mat_V$loc_ids
   vill_mat <-   vill_mat_V[, -c("loc_ids")]/vill_mat_N[, -c("loc_ids")]
   conn_met_vill <- apply(vill_mat, 2, conn_metric_vill, 
                          vill_ids = loc_ids, 
-                         cov_threshold = extra_pars$cov_threshold, 
+                         cov_threshold = extra_pars$cov_threshold * 0.9, 
                          adj_dt = extra_pars$adj_dt)
   max_conn_vill <- max(conn_met_vill)
   mean_conn_vill <- mean(conn_met_vill)
@@ -76,7 +77,8 @@ conn_stats <- function(names = c("I_dt", "extra_pars",
   return(data.table(max_conn_vill, mean_conn_vill, peak_chain_size, 
                     peak_chain_length, mean_chain_size, mean_chain_length,
                     nweeks_over_incs, peak_inc_local, peak_inc_total, 
-                    mean_inc_local, mean_inc_total, stopped))
+                    mean_inc_local, mean_inc_total, stopped, 
+                    cov_thresh_eff = extra_pars$cov_threshold * 0.9))
   
 }
 
@@ -100,7 +102,7 @@ conn_metric <- function(x, cell_ids, cov_threshold, rast) {
 conn_metric_vill <- function(x, vill_ids, cov_threshold, adj_dt) {
   
   # filter to cell_ids that have x > threshold
-  vills_now <- vill_ids[x >= cov_threshold]
+  vills_now <- vill_ids[x >= cov_threshold & x != 0]
   
   # filter adj_dt to these
   adj_now <- adj_dt[from %in% vills_now]

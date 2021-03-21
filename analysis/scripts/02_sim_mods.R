@@ -46,6 +46,7 @@ source("R/get_observed_data.R")
 source("R/utils-data.R")
 source("R/summ_stats.R")
 source("R/run_mods.R")
+source("R/conn_metrics.R")
 
 # Testing function ---------
 vacc_dt <- get_sd_vacc(sd_vacc_data, sd_shapefile, origin_date = cand$start_date,

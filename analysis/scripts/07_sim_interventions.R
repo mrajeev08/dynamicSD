@@ -1,6 +1,6 @@
 # Simulate from vaccination campaigns -------
 
-# sub_cmd:=-t 2 -n 12 -jn ints -wt 1m -md \'gdal\' -ar \'1-3\' -cmd \'5\' -sn -@
+# sub_cmd:=-t 6 -n 12 -jn ints -wt 1m -md \'gdal\' -ar \'1-3\' -cmd \'100\' -sn
 
 arg <- commandArgs(trailingOnly = TRUE)
 
@@ -77,8 +77,8 @@ post_joint <-  post_full[sim_id %in% inds_joint$sim_id]
 
 # sim campaigns across range of scenarios ----
 # vaccination loop
-vacc_scenarios <- expand.grid(vacc_cov = seq(0.1, 1, by = 0.1),
-                              vacc_prop = seq(0.1, 1, by = 0.1))
+vacc_scenarios <- expand.grid(vacc_cov = seq(0.2, 1, by = 0.2),
+                              vacc_prop = seq(0.2, 1, by = 0.2))
 vacc_scenarios <- rbind(data.frame(vacc_cov = 0, vacc_prop = 0), vacc_scenarios)
 vacc_scenarios$burn_in <- 5
 vacc_scenarios$years <- 10
@@ -137,10 +137,9 @@ if(int_ind == 2) {
   
 }
 
-if(int_ind == 2) {
+if(int_ind == 3) {
   pup_vacc <- 0.1 # 10 % of pups are vaccinated each month
   int_name <- "limit_temphet" 
-  
 } else {
   pup_vacc <- 0
 }
@@ -172,6 +171,10 @@ out_post_sims <-
                                  multi = FALSE,
                                  sim_vacc = sim_vacc, 
                                  routine_vacc = pup_vacc) 
+            
+            outs$cov <- extra_pars$cov_threshold
+            outs$prop <- vacc_scenarios[i, "vacc_prop"]
+            outs
           }
 
 # Write out results & close ----

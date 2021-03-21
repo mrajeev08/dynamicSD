@@ -1,6 +1,6 @@
 # Simulate from vaccination campaigns -------
 
-# sub_cmd:=-t 2 -n 12 -jn camps -wt 1m -md \'gdal\' -ar \'1-2\' -cmd \'5\' -sn -@
+# sub_cmd:=-t 6 -n 12 -jn camps -wt 1m -md \'gdal\' -ar \'1-2\' -cmd \'100\' -sn
 
 arg <- commandArgs(trailingOnly = TRUE)
 
@@ -113,6 +113,9 @@ out_post_sims <-
                                  weight_params = list(0), 
                                  multi = FALSE,
                                  sim_vacc = sim_vacc) 
+            outs$cov <- extra_pars$cov_threshold
+            outs$prop <- vacc_scenarios[i, "vacc_prop"]
+            outs
   }
 
 # Write out results & close ----

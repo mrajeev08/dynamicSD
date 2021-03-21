@@ -6,6 +6,8 @@ ts_stats <- function(names = c("I_dt", "extra_pars",
                                "break_threshold")) {
   
   
+  # Get the objects you need from the environment above this one
+  list2env(use_mget(names, envir_num = 2), envir = environment())
   obs_data <- extra_pars$obs_data
   
   # filter I_dt to successful transmission events & detected cases

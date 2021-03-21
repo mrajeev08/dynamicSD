@@ -102,7 +102,7 @@ out_post_sims <-
       set.seed(cand$seed) # same posteriors by candidate
       posts <- posts[, sample(resp, nsims, prob = V1, replace = TRUE), by = "param"]
       posts <- split(posts$V1, posts$param)
-        
+      
       outs <- run_simrabid(cand = cand, 
                            mod_specs = out,
                            param_ests = posts,
