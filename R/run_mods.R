@@ -13,7 +13,7 @@ run_simrabid <- function(cand,
                          weight_params, 
                          multi = FALSE, 
                          convolve_steps = TRUE, 
-                         sim_vacc = FALSE) {
+                         sim_vacc = "none") {
   
   
   start_up <- setup_sim(start_date = cand$start_date, 
@@ -93,16 +93,18 @@ run_simrabid <- function(cand,
   
   # functions to export to foreach loop
   export_funs <- c(list_funs("R/utils-data.R"), 
-                   list_funs("R/summ_stats.R"))
+                   list_funs("R/summ_stats.R"), 
+                   list_funs("R/conn_metrics.R")) # this should be an argument
   
   out_sims <-
     foreach(j = seq_len(nsims), 
             .combine = combine_fun, 
             .multicombine = multi, 
-            .packages = c("simrabid", 
+            .packages = c("simrabid", # this should be an argument
                           "data.table", 
                           "raster", 
-                          "magrittr"),
+                          "magrittr", 
+                          "igraph"),
             .export = export_funs,
             .options.RNG = cand$seed) %dorng% {
               
@@ -113,14 +115,32 @@ run_simrabid <- function(cand,
                 tryCatch(
                   expr = {
                     
-                    
-                    if(sim_vacc) {
+                    if(sim_vacc == "fixed") {
                       
-                      vacc_dt <- sim_campaigns(locs = seq_len(max(start_up$admin_ids, na.rm = TRUE)),
-                                               campaign_prob = vacc_dt$vacc_prop, 
-                                               coverage = vacc_dt$vacc_cov, sim_years = 10, 
-                                               burn_in_years = 5)
+                      # same vills for each sim
+                      max_id <- max(start_up$loc_ids)
+                      set.seed(cand$seed * j)
+                      locs <- seq_len(max_id)[rbinom(max_id, size = 1, prob = vacc_dt$vacc_prop)]
+                      vacc_dt <- sim_campaigns(locs = locs,
+                                               campaign_prob = 1, 
+                                               coverage = vacc_dt$vacc_cov, 
+                                               sim_years = vacc_dt$years, 
+                                               burn_in_years = vacc_dt$burn_in) 
+                      cover <- TRUE
                     }
+                    
+                    if(sim_vacc == "random") {
+                      
+                      vacc_dt <- sim_campaigns(locs = seq_len(max(start_up$loc_ids)),
+                                               campaign_prob = vacc_dt$vacc_prop, 
+                                               coverage = vacc_dt$vacc_cov, 
+                                               sim_years = vacc_dt$years, 
+                                               burn_in_years = vacc_dt$burn_in)
+                      cover <- TRUE
+                      
+                    }
+                    
+                    if(sim_vacc == "none") cover <- FALSE
                     
                     simstats <- simrabid(start_up, 
                                          start_vacc = cand$start_vacc, 
@@ -143,11 +163,12 @@ run_simrabid <- function(cand,
                                          track = cand$track,
                                          weights = weights, 
                                          row_probs = NULL,
-                                         coverage = sim_vacc,
+                                         coverage = cover, # this should be an argument!
                                          break_threshold = cand$break_threshold,
                                          by_admin = cand$by_admin,
                                          extra_pars = extra_pars)
                     
+                  
                     out <- merge_fun(simstats, t(pars), sim = j)
                   },
                   error = function(e){
@@ -162,6 +183,7 @@ run_simrabid <- function(cand,
                     NULL
                   }
                 )
+                
             }
   
   if(!all(out_sims$sim %in% 1:nsims)) {

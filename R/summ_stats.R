@@ -1,12 +1,10 @@
-# Time series from simulations
+# Time series from simulations ----
 ts_stats <- function(names = c("I_dt", "extra_pars", 
                                "start_date", "days_in_step", 
                                "S_mat", "N_mat",
                                "prop_start_pop", 
                                "break_threshold")) {
   
-  # Get the objects you need from the environment above this one
-  list2env(use_mget(names, envir_num = 2), envir = environment())
   
   obs_data <- extra_pars$obs_data
   
