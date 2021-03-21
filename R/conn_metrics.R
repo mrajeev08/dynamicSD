@@ -25,7 +25,11 @@ conn_stats <- function(names = c("I_dt", "extra_pars",
   
   # Get consecutive weeks with > 2 * SD above the incursion rate
   nweeks_over_incs <- I_ts > mean(I_incs) + 2 * sd(I_incs)
-  nweeks_over_incs <- max(with(rle(!nweeks_over_incs), lengths[!values]))
+  if(sum(nweeks_over_incs) > 0) {
+    nweeks_over_incs <- max(with(rle(!nweeks_over_incs), lengths[!values]))
+  } else {
+    nweeks_over_incs <- 0
+  }
   
   # Get peak incidence
   peak_inc_total <- max(I_ts)
@@ -56,19 +60,6 @@ conn_stats <- function(names = c("I_dt", "extra_pars",
     peak_chain_size <- peak_chain_length <- mean_chain_size <- mean_chain_length <- 0
   }
   
-  # get cov matrix at grid cell level: every 4 weeks to speed this up
-  inds <- seq(1, ncol(V_mat), by = 4)
-  cov_mat <- V_mat[, inds]/N_mat[, inds]
-  cov_mat[is.na(cov_mat)] <- 0
-  
-  conn_met_grid <- apply(cov_mat, 2, conn_metric, 
-                         cell_ids = cell_ids, 
-                         cov_threshold = extra_pars$cov_threshold, 
-                         rast = extra_pars$rast)
-  
-  max_conn_grid <- max(conn_met_grid)
-  mean_conn_grid <- mean(conn_met_grid)
-  
   # village stats
   vill_mat_V <- data.table(loc_ids, V_mat)[, sum(.SD), by = "loc_ids"]
   vill_mat_N <- data.table(loc_ids, N_mat)[, sum(.SD), by = "loc_ids"]
@@ -80,11 +71,12 @@ conn_stats <- function(names = c("I_dt", "extra_pars",
   max_conn_vill <- max(conn_met_vill)
   mean_conn_vill <- mean(conn_met_vill)
   
-  return(data.table(max_conn_grid, max_conn_vill, mean_conn_grid, 
-                    mean_conn_vill, peak_chain_size, 
+  stopped <- prop_start_pop < break_threshold
+  
+  return(data.table(max_conn_vill, mean_conn_vill, peak_chain_size, 
                     peak_chain_length, mean_chain_size, mean_chain_length,
                     nweeks_over_incs, peak_inc_local, peak_inc_total, 
-                    mean_inc_local, mean_inc_total))
+                    mean_inc_local, mean_inc_total, stopped))
   
 }
 

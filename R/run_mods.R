@@ -13,7 +13,8 @@ run_simrabid <- function(cand,
                          weight_params, 
                          multi = FALSE, 
                          convolve_steps = TRUE, 
-                         sim_vacc = "none") {
+                         sim_vacc = "none", 
+                         ...) {
   
   
   start_up <- setup_sim(start_date = cand$start_date, 
@@ -66,7 +67,7 @@ run_simrabid <- function(cand,
                            }, simrabid::steps_weibull), 
                     simrabid::dispersal_lognorm)
   
-  inc_fn <- ifelse(cand$estincs, simrabid::sim_incursions_pois, simrabid::sim_incursions_hardwired)
+  inc_fn <- ifelse(cand$estincs, sim_incursions_pois, sim_incursions_hardwired)
   move_fn <- ifelse(cand$weights, simrabid::sim_movement_prob, simrabid::sim_movement_continuous)
   
   # removing args if they're included in the priors
@@ -121,7 +122,7 @@ run_simrabid <- function(cand,
                       max_id <- max(start_up$loc_ids)
                       set.seed(cand$seed * j)
                       locs <- seq_len(max_id)[rbinom(max_id, size = 1, prob = vacc_dt$vacc_prop)]
-                      vacc_dt <- sim_campaigns(locs = locs,
+                      vacc_dt_i <- sim_campaigns(locs = locs,
                                                campaign_prob = 1, 
                                                coverage = vacc_dt$vacc_cov, 
                                                sim_years = vacc_dt$years, 
@@ -131,7 +132,7 @@ run_simrabid <- function(cand,
                     
                     if(sim_vacc == "random") {
                       
-                      vacc_dt <- sim_campaigns(locs = seq_len(max(start_up$loc_ids)),
+                      vacc_dt_i <- sim_campaigns(locs = seq_len(max(start_up$loc_ids)),
                                                campaign_prob = vacc_dt$vacc_prop, 
                                                coverage = vacc_dt$vacc_cov, 
                                                sim_years = vacc_dt$years, 
@@ -140,12 +141,15 @@ run_simrabid <- function(cand,
                       
                     }
                     
-                    if(sim_vacc == "none") cover <- FALSE
+                    if(sim_vacc == "none") {
+                      cover <- FALSE
+                      vacc_dt_i <- vacc_dt
+                    }
                     
                     simstats <- simrabid(start_up, 
                                          start_vacc = cand$start_vacc, 
                                          I_seeds = cand$I_seeds, 
-                                         vacc_dt = vacc_dt,
+                                         vacc_dt = vacc_dt_i,
                                          params = c(pars, 
                                                     param_defaults),
                                          days_in_step = cand$days_in_step,
@@ -166,7 +170,8 @@ run_simrabid <- function(cand,
                                          coverage = cover, # this should be an argument!
                                          break_threshold = cand$break_threshold,
                                          by_admin = cand$by_admin,
-                                         extra_pars = extra_pars)
+                                         extra_pars = extra_pars, 
+                                         ...)
                     
                   
                     out <- merge_fun(simstats, t(pars), sim = j)

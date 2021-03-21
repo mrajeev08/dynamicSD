@@ -1,6 +1,6 @@
 # Simulate from vaccination campaigns -------
 
-# sub_cmd:=-t 2 -n 12 -jn camps -wt 1m -md \'gdal\' -ar \'1-2\' -cmd \'5\' -sn -@
+# sub_cmd:=-t 2 -n 12 -jn ints -wt 1m -md \'gdal\' -ar \'1-3\' -cmd \'5\' -sn -@
 
 arg <- commandArgs(trailingOnly = TRUE)
 
@@ -10,8 +10,8 @@ set_up <- setup_cl(mpi = FALSE)
 
 # set up args and cluster if applicable ----
 vacc_ind <- ifelse(!set_up$slurm, 1, as.numeric(arg[1]))
-sim_vacc <- if(vacc_ind == 1) "fixed" else "random"
 nsims <- ifelse(!set_up$slurm, 5, as.numeric(arg[2]))
+sim_vacc <- "random"
 
 cl <- make_cl(set_up$ncores)
 register_cl(cl)
@@ -87,10 +87,68 @@ vacc_scenarios$years <- 10
 extra_pars <- list(tmin = 10 * 52, rast = out$rast, 
                    adj_dt = get_nb_dt(sd_shapefile))
 
+# setting up other params
+int_ind <- ifelse(!set_up$slurm, 1, as.numeric(arg[1]))
+
+# reducing superspreading (as district coverage increased limit transmission)
+if(int_ind == 1) {
+  nbinom_constrained <- function (n, params = list(R0 = 1.2, 
+                                                   k = 1,
+                                                   max_secondaries = 100), 
+                                  names = c("S", "N")) {
+    
+    # get S/N 
+    list2env(use_mget(names, envir_num = 2), envir = environment())
+    
+    # prop reduction
+    prop_sus <- sum(S)/sum(N)
+    if(prop_sus < 0.3) prop_sus <- 0.3
+    lims <- params$max_secondaries * prop_sus
+    secondaries <- rnbinom(n, size = params$k, mu = params$R0)
+    secondaries[secondaries > lims] <- round(lims) # out integer 
+    return(secondaries)
+    
+  }
+  
+  int_name <- "limit_sspreaders" 
+} 
+
+# reducing incursions
+if(int_ind == 2) {
+  sim_incursions_pois <- function (cell_ids, 
+                                   params = list(iota = 1),
+                                   names = c("S", "N")) {
+    
+    # get S/N 
+    list2env(use_mget(names, envir_num = 2), envir = environment())
+
+    # prop reduction
+    prop_sus <- sum(S)/sum(N)
+    if(prop_sus < 0.3) prop_sus <- 0.3
+    lims <- params$iota * prop_sus^2
+    
+    n_incs <- rpois(1, lims)
+    cell_id <- safe_sample(x = cell_ids, size = n_incs, replace = TRUE)
+    
+    return(cell_id)
+  }
+  
+  int_name <- "limit_incs" 
+  
+}
+
+if(int_ind == 2) {
+  pup_vacc <- 0.1 # 10 % of pups are vaccinated each month
+  int_name <- "limit_temphet" 
+  
+} else {
+  pup_vacc <- 0
+}
+
 out_post_sims <- 
   foreach(i = seq_len(nrow(vacc_scenarios)),
           .combine = rbind) %do% {
-
+            
             # sample from posteriors
             set.seed(cand$seed)
             posts <- post_joint[, sample(resp, nsims, prob = V1, replace = TRUE), by = "param"]
@@ -112,19 +170,20 @@ out_post_sims <-
                                  weight_covars = list(0), 
                                  weight_params = list(0), 
                                  multi = FALSE,
-                                 sim_vacc = sim_vacc) 
-  }
+                                 sim_vacc = sim_vacc, 
+                                 routine_vacc = pup_vacc) 
+          }
 
 # Write out results & close ----
-file_pref <- paste0("analysis/out/campaign_sims/")
+file_pref <- paste0("analysis/out/int_sims/")
 
 write_create(out_post_sims,
-             fp(paste0(file_pref, sim_vacc, "_locs.csv")),
+             fp(paste0(file_pref, int_name, ".csv")),
              data.table::fwrite)
 
 # Parse these from subutil for where to put things
 syncto <- "~/Documents/Projects/dynamicSD/analysis/out/"
-syncfrom <- "mrajeev@della.princeton.edu:/scratch/gpfs/mrajeev/dynamicSD/analysis/out/campaign_sims"
+syncfrom <- "mrajeev@della.princeton.edu:/scratch/gpfs/mrajeev/dynamicSD/analysis/out/int_sims"
 
 # Close out
 out_session(logfile = set_up$logfile, start = set_up$start, ncores = set_up$ncores)
