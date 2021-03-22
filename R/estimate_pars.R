@@ -62,11 +62,11 @@ estimate_pars <- function(reftable,
                                        c('summstat','importance')))
         out <- list(preds = out_preds, err = err_abcrf, var_imp = var_imp, 
                     stats = out_stats)
-        invisible(lapply(out, append_col, val = par_names[i], col_name = "param"))
+        out <- lapply(out, append_col, val = par_names[i], col_name = "param")
         out
       }
     
-    lapply(out, append_col, val = modname, col_name = "modname")
+    out <- lapply(out, append_col, val = modname, col_name = "modname")
     
     if(return_training) {
       return(list(out = out, training = training))
@@ -101,7 +101,7 @@ estimate_par_se <- function(reftable,
                                   predict, 
                                   return_training = FALSE)
             
-            lapply(out, append_col, col_name = "nsim", val = i)
+            out <- lapply(out, append_col, col_name = "nsim", val = i)
             out
   } -> out
   

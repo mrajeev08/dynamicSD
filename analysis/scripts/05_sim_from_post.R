@@ -1,6 +1,6 @@
 # Simulate from posteriors ---------
 
-# sub_cmd:=-t 2 -n 21 -jn psim -wt 1m -md \'gdal\' -ar \'1-24\' -cmd \'1e3\'
+# sub_cmd:=-t 2 -n 5 -jn psim -wt 1m -md \'gdal\' -ar \'1-2\' -cmd \'10\'
 
 arg <- commandArgs(trailingOnly = TRUE)
 
@@ -31,6 +31,7 @@ library(iterators)
 library(doRNG)
 library(lubridate)
 library(scoringRules)
+library(igraph)
 
 # load in shapefile & other data
 sd_shapefile <- st_read(system.file("extdata/sd_shapefile.shp", 
@@ -74,10 +75,6 @@ vacc_dt <- get_sd_vacc(sd_vacc_data, sd_shapefile, origin_date = cand$start_date
                        date_fun = lubridate::dmy, days_in_step = cand$days_in_step,
                        rollup = 4)
 endemic <- vacc_dt[0]
-  
-sd_vill_pop <- data.table(pop = out$start_pop, 
-                          vacc_locs = out$rast[])[, .(pop = sum(pop, na.rm = TRUE)),
-                                                  by = "vacc_locs"][!is.na(vacc_locs)]
 
 # loop list
 vacc_loop <- list(vill_vacc = vacc_dt, endemic = endemic)
@@ -116,7 +113,8 @@ out_post_sims <-
                            secondary_fun = nbinom_constrained,
                            weight_covars = list(0), 
                            weight_params = list(0), 
-                           multi = FALSE) 
+                           multi = FALSE, 
+                           sim_vacc = "none") 
       
       out_scores <- get_tempstats(outs, obs_data, quants = c(0.5, 0.9), 
                                   nsamp = 100, ncurves = 100, nbest = 5)
@@ -124,7 +122,7 @@ out_post_sims <-
       out_scores <- out_scores$ts_scores
       outs$modname <- out_scores$modname <- curve_scores$modname <- cand_now
       outs$vacc_type <- out_scores$vacc_type <- curve_scores$vacc_type <- names(vacc_loop)[i]
-      outs$post_type <- out_scores$post_type <- curve_scores$vacc_type <- names(post_loop)[j]
+      outs$post_type <- out_scores$post_type <- curve_scores$post_type <- names(post_loop)[j]
       
       list(sims = outs, scores = out_scores, curve_scores = curve_scores)
     }

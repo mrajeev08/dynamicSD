@@ -314,5 +314,4 @@ append_col <- function(x, col_name, val) {
   if(is.data.table(x)) {
     x[, c(col_name) := val]
   }
-  NULL
 }

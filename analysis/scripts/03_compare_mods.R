@@ -1,6 +1,6 @@
 # Random Forest ABC: Model choice -------
 
-# sub_cmd:=-t 12 -n 12 -jn comp -wt 10m -md \"gdal\" -sn -@ -mem 7000
+# sub_cmd:=-t 12 -n 12 -jn comp -wt 10m -md \"gdal\" -sn -@ -mem 8000
 
 # Set up on cluster ------
 source("R/utils.R")

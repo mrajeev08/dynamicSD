@@ -77,8 +77,8 @@ post_joint <-  post_full[sim_id %in% inds_joint$sim_id]
 
 # sim campaigns across range of scenarios ----
 # vaccination loop
-vacc_scenarios <- expand.grid(vacc_cov = seq(0.1, 1, by = 0.1),
-                              vacc_prop = seq(0.1, 1, by = 0.1))
+vacc_scenarios <- expand.grid(vacc_cov = seq(0.2, 1, by = 0.2),
+                              vacc_prop = seq(0.2, 1, by = 0.2))
 vacc_scenarios <- rbind(data.frame(vacc_cov = 0, vacc_prop = 0), vacc_scenarios)
 vacc_scenarios$burn_in <- 5
 vacc_scenarios$years <- 10
@@ -113,6 +113,7 @@ out_post_sims <-
                                  weight_params = list(0), 
                                  multi = FALSE,
                                  sim_vacc = sim_vacc) 
+            
             outs$cov <- extra_pars$cov_threshold
             outs$prop <- vacc_scenarios[i, "vacc_prop"]
             outs

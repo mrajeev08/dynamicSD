@@ -96,7 +96,7 @@ run_simrabid <- function(cand,
   export_funs <- c(list_funs("R/utils-data.R"), 
                    list_funs("R/summ_stats.R"), 
                    list_funs("R/conn_metrics.R")) # this should be an argument
-  
+ 
   out_sims <-
     foreach(j = seq_len(nsims), 
             .combine = combine_fun, 
@@ -116,7 +116,7 @@ run_simrabid <- function(cand,
                 tryCatch(
                   expr = {
                     
-                    if(sim_vacc == "fixed") {
+                  if(sim_vacc == "fixed") {
                      
                       # same vills for each sim
                       max_id <- max(start_up$loc_ids)
@@ -143,7 +143,7 @@ run_simrabid <- function(cand,
                     
                     if(sim_vacc == "none") {
                       cover <- FALSE
-                      vacc_dt_i <- vacc_dt
+                      vacc_dt_i <- copy(vacc_dt)
                     }
                     
                     simstats <- simrabid(start_up, 

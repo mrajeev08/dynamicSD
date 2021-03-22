@@ -136,7 +136,7 @@ compare_mod_se <- function(reftable,
                         ntree, 
                         predict, 
                         return_training)
-    invisible(lapply(out, append_col, col_name = "nsim", val = i))
+    out <- lapply(out, append_col, col_name = "nsim", val = i)
     out[unlist(lapply(out, is.data.table))]
   }
 }

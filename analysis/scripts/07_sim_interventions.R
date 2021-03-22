@@ -115,9 +115,9 @@ if(int_ind == 1) {
 
 # reducing incursions
 if(int_ind == 2) {
-  sim_incursions_pois <- function (cell_ids, 
-                                   params = list(iota = 1),
-                                   names = c("S", "N")) {
+  sim_incursions_pois <- function(cell_ids, 
+                                  params = list(iota = 1),
+                                  names = c("S", "N")) {
     
     # get S/N 
     list2env(use_mget(names, envir_num = 2), envir = environment())
@@ -138,7 +138,7 @@ if(int_ind == 2) {
 }
 
 if(int_ind == 3) {
-  pup_vacc <- 0.1 # 10 % of pups are vaccinated each month
+  pup_vacc <- 0.1 # 10 % of pups are vaccinated each week
   int_name <- "limit_temphet" 
 } else {
   pup_vacc <- 0

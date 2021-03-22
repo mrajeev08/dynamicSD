@@ -38,13 +38,18 @@ sd_census %>%
 usethis::use_data(sd_census_data, overwrite = TRUE)
 
 # Case data ----
+bounds <- st_bbox(sd_shapefile)
 case_dt %>%
   clean_names() %>%
   select(village_2002, utm_easting, utm_northing, biter_id, species, suspect,
          symptoms_started_known, symptoms_started,
          symptoms_started_accuracy)  %>%
   filter(suspect %in% "Yes", symptoms_started_known,
-         species %in% "Domestic dog") -> sd_case_data
+         species %in% "Domestic dog", 
+         year(dmy(symptoms_started)) >= 2002, 
+         year(dmy(symptoms_started)) <= 2020, 
+         utm_easting >= bounds$xmin & utm_easting <= bounds$xmax, 
+         utm_northing >= bounds$ymin & utm_northing <= bounds$ymax) -> sd_case_data
 
 usethis::use_data(sd_case_data, overwrite = TRUE)
 
