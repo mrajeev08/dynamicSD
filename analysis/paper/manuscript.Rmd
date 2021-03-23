@@ -1,0 +1,372 @@
+---
+title: "Spatial scale of control and mixing predicts dynamics of canine rabies"
+author: "Malavika Rajeev"
+output:
+  bookdown::pdf_document2: default
+  html_document: default
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+library(here)
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, 
+                message=FALSE, out.width="80%")
+source(here("analysis/scripts/stats.R"))
+library(readr)
+library(glue)
+library(dplyr)
+```
+
+## Abstract
+Canine rabies is a devastating and preventable disease that causes a high burden of deaths globally each year, particularly in low-and-middle countries where investment in control is limited. Given the mounting evidence that elimination of these deaths is possible, the WHO has set a target to eliminate canine rabies deaths in humans by the year 2030. Mathematical models are a powerful tool to inform these efforts, but to date, efforts to develop robust modeling frameworks for domestic dog populations have been hampered by a lack of data, inconsistencies between model results and observed dynamics. Here, we use a rich, long-term dataset on canine rabies cases in space and time in the Serengeti District in Tanzania. Using parallel data on vaccination campaigns and the underlying spatial distribution of the domestic dog population, we use a simulation-based inference approach to fit our models to key spatiotemporal features of the data. We find that incorporating both the spatial scale of population mixing and the scale of control are key to recovering observed dynamics. We use these results to explore different vaccination scenarios, and find that high spatial coverage of vaccination campaigns is necessary to prevent outbreaks of canine rabies. Moving forward these results provide practical insights into control strategies and modeling methods, as well as shed light on key processes driving rabies transmission. 
+
+## Introduction
+
+Rabies is a devastating and fatal disease that causes an estimated 60,000 human deaths annually across the globe [@hampson2015]. However, these deaths are preventable through post-exposure vaccination, which is highly effective at preventing death if administered promplty after exposure, and through vaccination of domestic dogs, which with sufficient coverage can interrput transmission and lead to elimination [@lankester2014]. Given that the world has the tools to end deaths due to rabies, the World Health Organization and it's partners have set a goal to eliminate deaths due to canine-mediated rabies by the year 2030 through a combination of these interventions [@abela-ridder2016]. 
+
+While there is a rich history of modeling wildlife rabies transmission dynamics, the body of work for canine rabies is much sparser. Critically, traditional models of wildlife rabies dynamics fail to capture patterns of incidence observed in endemic and epidemic scenarios. However, we have a strong understanding of rabies epidemiology and biology: transmission does not appear to scale with dog densitiies evidenced by consistent R0 estimates between 1 - 2 across a range of settings, the infectious period is short and infection is almost invariable fatal, and that key epidemiological parameters such as the dispersal kernel  and the incubation period are characterized by a long tail. While R0 estimates are consistent and low, there is considerable documented heterogeneity in infection with many infections resulting in no onwards transmission, while some cause upwards of 20 - 50 cases [@rajeev2020modeling]. 
+
+While the epidemiological backbone of rabies is clear, there is little data on disease dynamics in domestic dogs with which to confront models [@scott2017]. In fact, most modeling studies of canine rabies are simulation based, with few studies actually fitting models to data [@rajeev2020modeling]. This is largely due to poor surveillance, but given the epidemiological features of rabies combined with low detection rates, inference can be challenging. Rabies outbreaks are highly stochastic and likely driven by heterogeneities and rare events. Therefore traditional inference methods based on times series data are likely to fail when confronted with the noisy reality of rabies data.
+
+Here we use a uniquely comprehensive long-term dataset on canine rabies cases in space and time across the Serengeti District in Tanzania, where ongoing vaccination campaigns have shaped dynamics over the past twenty years. We build on recent work that highlights the role of spatial structure in mixing, simplifying the model, extending it to consider different movement scenarios, and comparing models at the scale of population mixing (~ 1 km) vs. at the scale of control (village scale). Coupled with data on vaccination and the spatial distribution of the dog population, we build an individual-based spatially explicit model, and using a simulation-based inference approach, fit it to key spatiotemporal features of the observed data to indentify models that best fit our data and generate realistic dynamics in endemic situations. Finally, we simulate vaccination campaigns and control strategies based on our findings to inform control efforts. 
+
+## Methods
+
+### Study area
+The Serengeti District in Tanzania is approximately `r stats$sd_size_km2` km^2^ in area and is comprised of of multi-ethnic agropastoralist communities (estimated human population of `r stats$human_pop_2012` at the time of the last census in 2012) with high dog ownership (estimated human-to-dog ratios ranging from `r stats$sd_hdr_range`). Rabies has been endemically circulating in the district, with documented outbreaks reported as early as the 1950s [@brunker2015], and rabies vaccination campaigns have been ongoing in the district since the early 1990s. These efforts began as a way to protect wild carnivore communities in the bordering Serengeti National Park, but with research and non-governmental partnerships with the Tanzanian government and vaccine manufacturers, these have expanded into a large scale elimination program.
+
+Since 2002, a long-term study of canine rabies and domestic dogs has been ongoing in the district [@Hampson2009], with data collected on clinical and laboratory diagnosed cases of animal rabies, as well as vaccination and dog ownership data. Here we use three key datasets from this study system:
+
+1) Case histories of clinical and laboratory diagnosed dog rabies cases between 2002 - 2020 (N = `r nrow(sd_case_data)` observations with and approximate date of symptom onset and GPS location (\@ref(fig:data)A and B). 
+
+2) Data on village level number of dogs vaccinated annually as part of ongoing district wide vaccination campaigns (\@ref(fig:data)C).
+
+3) A full household and dog census of the district conducted between `r stats$dates_census`, with the spatial location of households, the number of adult dogs and puppies in each household, the number of individuals in these households, and dog vaccination status (\@ref(fig:data)D).  
+
+We also used census data on human population sizes from the 2002 and 2012 national census in Tanzania to estimate population growth over the district. Village (i.e. administrative level 3) boundaries for the district were constructed using the distribution of household locations belonging to each village from the dog census data (\@ref(fig:data)D, [@Mancyinprep]).
+
+```{r data, fig.cap='(ref:capdata)'}
+knitr::include_graphics(here("analysis/figs/fig_data.jpeg"))
+```
+
+(ref:capdata) Figure 1. Datasets used in the analyses. A) Shows the time series of monthly rabies cases in domestic dogs and B) shows their spatial distribution across the district. C) The annual number of dogs vaccinated each year during mass campaigns. D) The location of household census data with colors showing the number of dogs owned per household. Polygons delineate village boundaries in the district.  
+
+### A spatially-explicit, individual-based model of rabies transmission
+We developed a discrete-time, individual-based, Susceptible-Exposed-Infectious-Vaccinated transmission model to simulate rabies dynamics in the domestic dog population. Transmission occurs at the individual level with secondary cases drawn from a right censored negative binomial distribution with mean $R_{0}$ and dispersion parameter $k$ (to capture hetereogeneity, but constrained so that secondary cases from a single individual do not exceed 100 cases, a realistic range of transmission potential). Movement of infectious individuals occurs in continuous space, with distances either drawn as a dispersal distance (log normal distribution, i.e. case movements are all drawn in reference to the progenitor location) or as a random walk with a Weibull step length distribution, (i.e. case movements are sequential). The tiiming of when a dog becomes infectious after exposure is drawn from a lognormal serial interval distribution (the infectious period + the incubation period). Previous work has shown the importance of introductions of rabies cases from outside the district in maintaining transmission within the district [@Mancyinprep]. We use two approaches to simulate introductions:
+
+1) Using inferred locations of introductions from transmission tree reconstruction between 2002 - 2015 to explicitly seed transmission chains
+2) Drawing the number of weekly introductions as a poisson distributed variable ($\iota$) and randomly seeding them in space
+
+Demographic processes occur sequentially and are aggregated to the spatial scale being modeled: new dogs are born according to village level birth rates; dogs die at a fixed rate across the district, and finally vaccination occurs. Vaccinations are allocated from the village level to the spatial scale being modeled, allocated by population size in a given location, and we assume that surviving vaccinated dogs are revaccinated in subsequent campaigns, giving a conservative estimate of vaccination. To get initital dog population sizes in each location, we estimate human to dog ratios from the dog census data, and apply them to human population estimates from national census data at the start of our simulation period (2002). We allocate them spatially according to the distribution of households and dogs from the census data. To get village level growth rates, we estimate human population growth between 2002 - 2012 from the national census data at the village level and assume that dog populations grow at that same rate (and assume a fixed death rate, Table 1, Czupryna). We do not apply demographic transitions to exposed or infectious individuals (i.e. they only move out of their classes when moving from exposed to infectious or infectious to removed). 
+
+We use a weekly time step to aggregate both demographic and transmission events (i.e. infectious dogs in location x at week t all compete for the same contacts) and explore different scales of spatial mixing: at an 1 km^2^ resolution and at the village scale (in UTM Zone 36S such that distances between grid cells are as close to 1 km as possible). \@ref(tab:inputs) lists all parameters and their sources. In addition to comparing mixing at the village and 1 km scales, we also explore how further constraining movement of rabid dogs impacts model inference. At the baseline, we do not constrain movements of rabid dogs: that is rabid dog movements to locations outside of the district or to uninhabited patches will result in a failed transmission event. We compare this baseline (which we refer to hereafter as the no limits model) with a model that restrict movements to only inhabited patches (i.e. populated patches at the beginning of the simulation, the patch limits model), and finally a model that restricts movement to both uninhabited patches and to the district (the full limits model). For the constrained models, we do not resample individual movements that fail as this could potentially skew the underlying parameter distance distribution (for example, if resampling happens often enough, this can shift both the average and skew of the distribution). Instead, for each movement we draw distances, find grid cells within that distance, and sample movement to valid locations given the model constraints. We assume that infection is completely fatal, and infectious individuals are removed at the end of the weekly timestep during which they became infectious. Finally, to account for imperfect case detection we use a monthly beta binomial detection probability (\@ref(tab:inputs)). 
+
+```{r inputs}
+knitr::kable(
+  tribble(
+    ~`Input (units)`, ~Distribution, ~Source,
+    "Secondary case distribution (number of dogs)", 
+    "Right censored negative binomial distribution with mean = $R_{0}$ and dispersion parameter $k$", 
+    "$R_{0}$ and $k$ are estimated, prior centered around estimates from [@Hampson2009]", 
+    "Weekly rate of introductions", "Poission distrubtion", "Estimated", 
+    "Serial interval distribution (days)", 
+    glue("Lognormal distribution with mean = {round(param_defaults$serial_meanlog, 2)}, and sd = {round(param_defaults$serial_sdlog, 2)}"), 
+    "[@Mancyinprep]", 
+    "Dispersal kernel (meters)", 
+    glue("Lognormal distribution with mean = {round(param_defaults$disp_meanlog, 2)}, and sd = {round(param_defaults$disp_sdlog, 2)}"), 
+    "[@Mancyinprep]", 
+    "Step length distribution (meters)",
+    glue("Convolved Weibull distribution with shape = {round(param_defaults$steps_shape, 2)}, and scale = {round(param_defaults$steps_scale, 2)}"), 
+    "[@Mancyinprep]", 
+    "Annual death rate (dogs/yr)", "1/25.8 yrs", "@czupryna2016", 
+    "Rate of waning vaccine immunity (dogs/yr)", "1/3 yrs", "[@Hampson2009]"
+  )
+)
+```
+
+
+### Model selection & parameter estimation
+We use Random Forest Approximate Bayesian Computation (RF-ABC) implemented in the R package `abcrf`  [@pudlo2015; @raynal2018] to perform model selection and parameter inference. We estimate three parameters: $R_{0}$ (the mean of the secondary case distribution), $k$ (the dispersion parameter of the secondary case distribution), and $\iota$ (the mean weekly number of introductions of rabies cases from outside of the district). We use strong priors based on previous analyses of part of this dataset (\@ref(tab:inputs))[@Hampson2009]. RF-ABC can be used to evaluate both models and potential summary statistics (i.e. key features of the data that the model should capture). \@ref(tab:sstats) lists the candidate summary statistics we used for model selection and parameter estimation, encompassing temporal, spatial, and spatiotemporal metrics of the data. RF ABC ranks each of these parameters by their importance in predciting a given parameter or in differentiating models. For both model selection and parameter estimation, we generate N = 1e5 simulated sets of summary statistics. We use the default parameter of 500 trees in the random forest for estimation, and also perform a sensitivity analysis with subsets of the full dataset (subsampling to 75% of simulated dataset) to assess whether estimates are stable. We use out-of-bag error rates (the error rate of the out-of-bag classifier on the training set) for model selection to assess the stability of model estimates to the number of simulated datasets and the number of trees in the Random Forest [@raynal2018]. RF-ABC does not allow for joint parameter estimation, however, we approximate joint posteriors by including parameter sets where all estimated parameters were accepted (i.e. all values were assigned non-zero weights by the random forest classification).
+
+We perform model selection for models within spatial scales, i.e. to identify the best candidate model at the village and 1 km scale. We then simulate from the estimated posterior distributions (N = 1000) and compare this to our observed data. We score simulations using the continuous ranked probability score [@jordan2019], and for each simulation of the monthly time series, we also generate centrality scores (i.e. how representative is a given simulation of the ensemble, [@juul2020]) and also the root mean squared error (RMSE) against the observed monthly cases. We also simulate an endemic scenario with no vaccination to see if the models can generate realistic dynamics in this context. 
+
+```{r sstat}
+sstat_tab <- readr::read_csv("analysis/out/summ_stat_labs.csv")
+knitr::kable(dplyr::select(dplyr::filter(sstat_tab, !is.na(descr)), -summstat), 
+             col.names = c("Summary statistic", "Description", "Type"))
+
+```
+
+
+### Assessing simulated vaccination campaigns impact on transmission 
+To explore how spatial heterogeneities in vaccination coverage could drive outbreak risk, using our best model, we simulate across a range of campaign scenarios. We vary both the level of coverage achieved during annual campaigns (campaign coverage), and the proportion of villages which are vaccinated during campaigns (spatial coverage), and use our posterior estimates to simulate transmission dynamics. We simulate these campaigns (N = 100 simulations per combination) with random villages being vaccinated with probability x in each year. We simulate a five year endemic burn-in period, and then simulate annual campaigns over ten years. In the last five year period of the simulation, we calculate summary statistics that capture key metrics of control success such as peak and mean incidence, chain size and length, and weeks where transmission exceeds the 95th% of the mean incidence of introduced cases only. We also calculate a connectivity based summary statistic at the village level (c) which equals the sum of squares of the component size of the village graph, where villages are connected if they are adjacent and if coverage at that time step exceeds a threshold (the campaign coverage for a given simulation).  
+
+### Assessing the impact of additional interventions on transmission and outbreak probabilities. 
+We also explore approximations of different intervention strategies implemented in tandem with vaccination on outcomes using our best model. We simulate approximations of two different interventions in combination with the random village campaigns as described above:
+1) 'Chopping the tail' of the secondary case distribution, where we decrease the censorsing value as vaccination increases, to approximate how enhanced surveillance and isolation/quarantine/removal of rabid dogs can improve control outcomes
+2) Reducing introductions as coverage increases, i.e. approximating coordination of vaccination campaigns across larger spatial scales
+
+(S\@ref(sfig-conn-constraint)) shows the reductions in introduction rates and maximum allowed secondary cases given district level coverage.
+
+### Data and ethics statement
+The data used in these analyses are part of a long term research project in the Serengeti District approved through the University of Glasgow Ethics Board and by the Tanzania Commission for Science and Technology, and National Institute for Medical Research. Anonymized data and code are available at gitub.com/mrajeev08/dynamicSD (to be archived on zenodo and made public upon article submission) and the underlying simulation model is available here (github.com/mrajeev08/simrabid). All analyses were done using R [cite] and the following key packages: abcrf, ranger, data.table, sf, raster. 
+
+## Results
+
+### The scale of mixing and specification of introductions differentiate models.
+
+```{r}
+mod_predicted <- read_csv("analysis/out/mod_summary.csv")
+```
+
+Parameter estimates and model predictions largely varied across two axes: whether introductions were estimated or fixed within the model and the scale of mixing (a 1km^2^ scale vs. the village scale). The models with kernel based movement and estimating introductions were both ranked highest for both scales, and at the 1 km scale, models that further restricted movement to inhabited patches (patch limits model) was best predicted the data (S\@ref(fig:sfig-mod-ranks)). Summary statistics that best differentiated the models encompassed both spatial and temporal summary statistics, and the linear-discriminant analysis axes generated by the RF ABC model (\@ref(fig:mfig-mods)B). These results were robust to subsampling the datasets (S\@ref(fig:sfig-mod-vimp)) and out-of-bag prior error rates were relatively stable with inclusion of additional trees in the random forest model (S\@ref(fig:sfig-mod-err)).
+(\@ref(fig:mods)B. However, broadly, all the models and priors failed to consistently recapture the major components of the summary statistics (\@ref(fig:mfig-mods)A) or clearly differentiate between models within scales (S\@ref(fig:sfig-mod-lda)). 
+
+```{r mfig-mods, fig.cap='(ref:mfig-mods-cap)'}
+
+knitr::include_graphics(here("analysis/figs/mfig_mod.jpeg"))
+```
+
+
+(ref:mfig-mods-cap) Model selection using RF ABC. A) The two major LDA axes generated by the random forest model for the best model at the village and 1 km scale, with the LDA values predicted for the observed data shown as triangles. B) The importance ranking of each variable in discriminating between models.
+
+### Capturing the spatial scale of vaccination and of mixing is key to recovering the observed trajectory of rabies in the Serengeti District.
+
+We estimated three parameters: $R_{0}$, k, and $\iota$ (for models estimating introductions) using these same models and summary statistics. $R_{0}$ was best predicted by temporal summary statistics, while k and $\iota$ were predicted by spatial and spatiotemporal summary statistics (\@ref(fig:mfig-posts-vimp), S\@ref(fig:sfig-posts-vimp)). Estimates of $R_{0}$ were consistent and identifiable across the models and robust to subsampling simulations (S\@ref(fig:sfig-posts-err), but varied significantly across scales and introduction scenarios (S\@ref(fig:sfig-posts-jntvsfull). When comparing posterior estimates for the best models at each scale, $R_{0}$ estimates were lower in models at the village scale when compared to the 1 km scale (\@ref(fig:mfig-posts-best), \@ref(tab:pars)). Estimates of k and $\iota$ were more diffuse, and when filtering to parameter sets that had been accepted jointly (i.e. had non-zero weights for all three parameters), estimates of the introduction rate became sharper, while k became bimodal (S\@ref(fig:sfig-posts-jntvsfull)).
+
+```{r pars}
+mod_predicted %>%
+  filter(type == 'full') %>%
+  group_by(scale) %>% 
+  filter(votes.V1 == max(votes.V1)) -> chosen
+
+chosen %>%
+  mutate(chosen_names = interaction(move, incs, scale, limits)) %$%
+  chosen_names -> cnames
+
+par_ests <- read_csv("analysis/out/par_stats.csv")
+par_ests %>%
+  filter(interaction(move, incs, scale, limits) %in% cnames) %>%
+  mutate(across(is.numeric, ~round(.x, 2))) %>%
+  mutate(text_val = glue("{expectation} ({quantile_0.025} - {quantile_0.975})")) %>%
+  dplyr::select(scale, text_val, param) %>%
+  tidyr::pivot_wider(names_from = param, values_from = text_val) -> out_pars
+
+knitr::kable(out_pars,
+             col.names = c("Scale", "$R_{0}$", "$k$", "$\\iota$"),
+             caption = 'Independent posterior expectations (and 95% quantile) estimates for the best model at each scale.')
+
+```
+
+
+```{r mfig-posts-vimp, fig.cap='(ref:mfig-posts-vimp-cap)'}
+knitr::include_graphics(here("analysis/figs/mfig_posts_vimp.jpeg"))
+```
+
+
+(ref:mfig-posts-vimp-cap) Ranking of summary statistics for importance in predicting each parameter. Summary statistics are colored by the type of statstic (either spatial, temporal, or spatial temporal). Results are shown for the best fitting model at the village and 1 km scale.
+
+
+```{r mfig-posts-best, fig.cap='(ref:mfig-posts-best-cap)'}
+knitr::include_graphics(here("analysis/figs/mfig_posts_vimp.jpeg"))
+```
+
+
+(ref:mfig-posts-best-cap) Independent and joint posterior estimates for the best fitting model at the village and 1 km scale for the three parameters, with prior density in grey.
+
+
+When simulating the data from the posteriors, the models ranked highest by the RF ABC method estimates result in simulations closest to the data observed (\@ref(mfig-sims-best), S\@ref(sfig-sims-full)). Sampling from the joint parameter sets also improved fits to the data (S\@ref(sfig-sims-joint), S\@ref(sfig-sims-crps)). At both the village and 1 km scale, simulations encompass the trajectory of cases we observed. However, the village scale model fails to capture stable dynamics in an endemic scenario with no vaccination, with transmission resulting in significnt declines in the host population, while models at the 1km scale generate stable endemic incidence without depleting the host population (S\@ref(sfig-sims-endemic)). 
+
+
+```{r mfig-sims-best, fig.cap='(ref:mfig-sims-best-cap)'}
+knitr::include_graphics(here("analysis/figs/mfig_sims_best.jpeg"))
+```
+
+
+(ref:mfig-sims-best-cap) Simulations from the joint posterior distributions of the best fitting model. The grey envelope shows the range of simulations, and the black line is the time series of observed monthly cases. The orange lines show the top three simulations that best fit the data (lowest RMSE) and the purple lines show the top three simulations that have the highest centrality score.
+
+
+### Spatial coverage of vaccination predicts control outcomes and interventions that target key features of transmission improve these outcomes.
+
+We find that control outcomes are strongly predicted by both campaign (i.e. the coverage level achieved by a village campaign) and spatial coverage (the proportion of villages covered by a campaign)(S\@ref(sfig-base-mets)). We find that campaigns that acheive an annual campaign coverage of 80% of the population and a spatial coverage of 80% of villages are most likely to prevent outbreaks of canine rabies (defined as greater than 4 months with weekly cases greater than the 95% of the average of the introduced cases) (\@ref(mfig-int-comp)). These broadly track with other metrics of control outcomes as well, such as the average peak size and length of transmission chains, and mean and peak incidence (S\@ref(sfig-base-mets)). In general, both spatial and campaign coverage are more predictive of peak rather than average metrics (S\@ref(sfig-base-mets)). Connectivity of vaccinated villages varies the most at intermediate spatial coverage, and this metric also broadly predicts control outcomes within a given campaign scenario (S\@ref(sfig-conn-mets)). 
+
+Two additional control strategies, one increasingly censoring transmission as coverage increases, approximating control strategies such as tracing and quarantine, and the second reducing the introduction rate as coverage is increased, approximating coordinated control efforts across larger geographic scales, also greatly improve control outcomes (S\@ref(sfig-incs-mets) and S\@ref(sfig-sspread-mets)). In particular, reducing the introduction rate shifts both the spatial coverage and campaign coverage required to limit outbreaks (\@ref(mfig-int-comp)). 
+
+
+```{r mfig-int-comp, fig.cap='(ref:mfig-int-comp-cap)'}
+knitr::include_graphics(here("analysis/figs/mfig_int_comp.jpeg"))
+```
+
+
+(ref:mfig-sims-best-cap) Outbreak probabilities (defined here as whether the number of consective weeks with cases above the 95th% of the incursion rate exceeding 16 weeks) in relation to a range of campaign coverage and spatial coverage under the baseline scenario and with the additional limits on transmission heterogeneity and introductions.
+
+
+
+## Discussion
+
+<!-- Don't forget to come back to this and include discussion of fitting to stochastic world and a trajectory in observed space rather than a time series per se -->
+<!-- Narrow window in parameter space where rabies can persist -->
+
+Overall, we find that accounting for both the spatial scale of vaccination and of mixing is critical to capturing the observed dynamics of canine rabies in the Serengeti District. Confirming previous work, we show that modeling transmission at the scale of dispersal (~ 1km) is key to capturing stable endemic dynamics and also result in parameter estimates closest to empirical estimates from individual scale data. We also found that introductions of cases from outside the district are crucial to the maintenance of transmission. Importantly, spatial and spatiotempral features of the data were key to differentiating between models and identifying parameter estimates, and the time series statistics of the data were generally the least predictive of model separation or parameter estimates. We find that high spatial coverage of vaccination campaigns is key to predicting control outcomes, even at a coarse administrative level. Aiming for vaccination targets that account for spatial as well as annual temporal targets (i.e. 70% of dogs in at least 70% of villages) rather than a single coverage target may improve control outcomes. In addition, given the importance of transmission heterogeneity and introductions in transmission, control measures targeted at these key features, i.e. reducing superspreading and curtailing transmission through active surveillance approaches, as well as coordinating control across larger geographic scales as vaccination campaigns are implemented, could compound the dividends gained through vaccination alone. 
+
+We use a uniquely comprehensive data set in both temporal and spatial scope in our analysis. This data allow us to pin down key features and expectations of rabies transmission, and the vaccination and population data provide a lense into the underlying susceptible dynamics of the population. In addition, we have a strong empirical understanding of key epidemiological parameters governing rabies transmission (i.e. incubation and infectious periods, dispersal kernels). Regardless of working with strong priors and in a narrow parameter space, certain parameters were still not identifiable and no model was consistently able to predict the data observed. Further refining summary statistics that draw the most information out of the available data or using may be a way forward to deal with these identifiability issues. However, given the stochastic nature of tranmsission dynamics focusing on whether the observed data falls in the general trajectory space of the model may be the best we can do. The RF-ABC method is limited to estimation of independent parameter estimates, and we use a simple approach of filtering parameter sets where all weights are non-zero to approximate joint distributions. However, more work is needed to validate this approach, and improvement of the model computational approach to adapt it to sequential MCMC approaches. 
+
+There are akso uncertainties in the data that we did not account for. We use coarse demographic estimates at the village scale to simulate populations and do not account for immigration, emigration, or colonization of new patches. Our coverage estimates could be sensitive to these assumptions, although at the village scale, they generally track with estimates of vaccination coverage from post-vaccination surveys. In addition, we do not account for uncertainty in the case data in terms of timing and location of cases, and we use data on probable rabies cases rather than confirmed, but this approach has been shown to be highly specific in identifying true rabies cases [@Hampson2009]. We assume that case detection is high over this period, with approximately 85% of cases detected each month. More work is needed to assess how sensitive our parameter estimates and model choice are to detection scenarios. Finally, our simulated control and vaccination scenarios are phenomenological and simplified approximations, rather than explicit representations of control programmes. 
+
+Overall, we excluded many features of previous rabies modeling studies. We simulate secondary cases rather than biting rates and exposure probabilities [@Mancyinprep], we do not account for human mediated dog movement within the district [@ferguson2015; @townsend2013], we do not model the wildlife population [@fitzpatrick2012], and finally we do not include reactive control to rabies outbreaks [@ferguson2015; @townsend2013]. However, many of these features are likely captured implicitly within this model. Human-mediated dog movements and wildlife cases may be captured in the introduction rate, and reactive control (that is not based on increasing response with incidence) is likely captured in the dispersion parameter (i.e. tying/killing/isolation of dogs resulting in failed transmission events). Here, we show that including these features explicitly may not be necessary when modeling transmission at the appropriate spatial scale and when incorporating key epidemiological features of the data (i.e. transmission heterogeneity). However more work will be needed to distentangle these factors, particularly in identifying the role of introductions in transmission. Reactive contol in particular, has often been used as a mechanism in previous models to generate realistic endemic dynamics and prevent host population declines, however there is little evidence that these measures scale temporally with incidence [@Hampson2009]. As the village level model did result in simulated trajectories matching our observed data, modeling dynamics at the scale of the control intervention may be sufficient to capture dynamics, and metapopulation models at the scale of control that approximate mixing could greatly reduce data barriers to implementing spatial models (i.e. estimating the underlying population at a high resolution)[@pascual2011].
+
+This work broadly confirms previous work on canine rabies tranmission dynamics showing the importance of coverage heterogeneity in determining control outcomes and the spatial scale of mixing [@Mancyinprep]. Recent phylodynamic analyses of integrated sequence and epidemiological data have also highlighted the role of introductions from surrounding populations [@zinsstag2017; @bourhy2016; @laager2019]. These studies were largely at the scale of urban cities, and the authors argue that this indicates that rabies is not maintained within the population being studied. We find similar results in the Serengeti context, a less densely populated mosaic of agropastoralist communities. Together this work suggests that maintenance for canine rabies likely occurs across large spatial scales [@hampson2007], and that low frequency events such as long-tailed disease induced dispersal or human mediated dog movement could facilitate this [@brunker2015; @talbi2010]. This has significant implications for control in that there are unlikely to be key sources or sink populations, or a critical community size for persistence [@identify2002]. Rather, as phylogenetic analyses of cases from this district show, there are likely critical landscape structures over which rabies can persist [@brunker2018].
+
+Broadly, these results indicate the need to integrate key epidemiologcal features of transmission into dynamic models. We show that many aspects of transmission that have been included in previous models can be incorporated implicitly, and that modeling both the spatial scale of control and transmission is important for capturing observed dynamics under vaccination and stable endemic dynamics. Practically, developing spatial control targets may be a useful approach to improving the link between targets and outcomes, and providing improved guidelines for vaccine implementation. However, more work should be done on how landscape and community structure impacts these outcomes. Moving forward, our work highlights the importance of confronting models with data and of incorporating key epidemiological features into models to generate realistic endemic and epidemic dynamics.  
+
+## References
+
+## Supplementary Figures
+
+
+```{r sfig-mod-ranks, fig.cap='(ref:sfig-mod-ranks-cap)'}
+
+knitr::include_graphics(here("analysis/figs/sfig_mod_err.jpeg"))
+```
+
+
+(ref:sfig-mod-ranks-cap) Percent of times each model selected with the panels comparing models with fixed vs. estimated introductions, the colors showing the model scale, and the x-axis how movement was specified (see Methods).
+
+
+```{r sfig-mod-lda, fig.cap='(ref:sfig-mod-lda-cap)'}
+
+knitr::include_graphics(here("analysis/figs/sfig_mod_lda.jpeg"))
+```
+
+
+(ref:sfig-mod-lda-cap) Predicions for observed vs. simulated data along the two major LDA Axes for all models. Colors indicate the scale of model, the columns are the type of movement and whether introductions were estimated or fixed, and the rows indicate how movement was restricted (see Methods).
+
+
+
+```{r sfig-mod-vimp, fig.cap='(ref:sfig-mod-vimp-cap)'}
+
+knitr::include_graphics(here("analysis/figs/sfig_mod_vimp.jpeg"))
+```
+
+
+(ref:sfig-mod-vimp-cap) Variable importance plots for models run with the full simulation data set (N = 1e5 simulations per model), or subsampled datasets (approx. 75% of the full simulation data set).
+
+
+
+```{r sfig-mod-err, fig.cap='(ref:sfig-mod-err-cap)'}
+
+knitr::include_graphics(here("analysis/figs/sfig_mod_err.jpeg"))
+```
+
+
+(ref:sfig-mod-err-cap) Out-of-bag predictions of the out-of-bag error rate as trees are added separated by the scale of the model comparison.
+
+```{r sfig-posts-vimp, fig.cap='(ref:sfig-posts-vimp-cap)'}
+
+knitr::include_graphics(here("analysis/figs/sfig_posts_vimpgr.jpeg"))
+```
+
+
+(ref:sfig-posts-vimp-cap) Variable importance plots for models run with the full simulation data set (N = 1e5 simulations per model), or subsampled datasets (approx. 75% of the full simulation data set) for each parameter and model.
+
+
+```{r sfig-posts-jntvsfull, fig.cap='(ref:sfig-posts-jntvsfull-cap)'}
+
+knitr::include_graphics(here("analysis/figs/sfig_posts_jntvsfull.jpeg"))
+```
+
+
+(ref:sfig-posts-jntvsfull-cap) Independent posterior estimates for models run with the full simulation data set (N = 1e5 simulations per model), or subsampled datasets (approx. 75% of the full simulation data set) for each parameter and model
+
+
+```{r sfig-posts-err, fig.cap='(ref:sfig-posts-err-cap)'}
+
+knitr::include_graphics(here("analysis/figs/sfig_posts_err.jpeg"))
+```
+
+
+(ref:sfig-posts-err-cap) Out-of-bag error rates as trees are added separated by the scale of the model comparison and the parameter being estimated.
+
+
+```{r sfig-sims-full, fig.cap='(ref:sfig-sims-full-cap)'}
+
+knitr::include_graphics(here("analysis/figs/sfig_sims_full.jpeg"))
+```
+
+
+(ref:sfig-sims-full-cap) Simulations from the independent posterior estimates for all the models. The grey envelope shows the range of simulations, and the black line is the time series of observed monthly cases. The orange lines show the top three simulations that best fit the data (lowest RMSE) and the purple lines show the top three simulations that have the highest centrality score.
+
+
+```{r sfig-sims-joint, fig.cap='(ref:sfig-sims-joint-cap)'}
+
+knitr::include_graphics(here("analysis/figs/sfig_sims_joint.jpeg"))
+```
+
+
+(ref:sfig-sims-joint-cap) Simulations from the joint posterior estimates for all the models. The grey envelope shows the range of simulations, and the black line is the time series of observed monthly cases. The orange lines show the top three simulations that best fit the data (lowest RMSE) and the purple lines show the top three simulations that have the highest centrality score.
+
+
+```{r sfig-sims-crps, fig.cap='(ref:sfig-sims-crps-cap)'}
+
+knitr::include_graphics(here("analysis/figs/sfig_sims_crps.jpeg"))
+```
+
+
+(ref:sfig-sims-crps-cap) Continuous ranked probability scores for the simulated datasets compared to the observed.
+
+
+```{r sfig-sims-endemic, fig.cap='(ref:sfig-sims-endemic-cap)'}
+
+knitr::include_graphics(here("analysis/figs/sfig_sims_endemic.jpeg"))
+```
+
+
+(ref:sfig-sims-endemic-cap) The proportion of simulations resulting in population declines > 15% by each time step for the best model at each scale.
+
+ 
+
+```{r sfig-conn-constraint, fig.cap='(ref:sfig-conn-constraint-cap)'}
+
+knitr::include_graphics(here("analysis/figs/sfig_conn_constraint.jpeg"))
+```
+
+
+(ref:sfig-conn-constraint-cap) The relationship between district level proportion susceptible and reduction in introduction rate and limits on secondary cases.
+
+
+```{r sfig-base-mets, fig.cap='(ref:sfig-base-mets-cap)'}
+
+knitr::include_graphics(here("analysis/figs/sfig_base_mets.jpeg"))
+```
+
+
+(ref:sfig-base-mets-cap) Simulation outcomes across a range of campaign coverage and spatial coverage for the baseline case.
+
+
+```{r sfig-sspread-mets, fig.cap='(ref:sfig-sspread-mets-cap)'}
+
+knitr::include_graphics(here("analysis/figs/sfig_sspread_mets.jpeg"))
+```
+
+
+(ref:sfig-sspread-mets-cap) Simulation outcomes across a range of campaign coverage and spatial coverage incorporating reductions in the maximum number of secondary cases rate as district coverage increases.
+
+
+```{r sfig-incs-mets, fig.cap='(ref:sfig-incs-mets-cap)'}
+
+knitr::include_graphics(here("analysis/figs/sfig_incs_mets.jpeg"))
+```
+
+
+(ref:sfig-sspread-mets-cap) Simulation outcomes across a range of campaign coverage and spatial coverage incorporating reductions in the introduction rate as district coverage increases.
+
+
+```{r sfig-conn-mets, fig.cap='(ref:sfig-conn-mets-cap)'}
+
+knitr::include_graphics(here("analysis/figs/sfig_conn_mets.jpeg"))
+```
+
+
+(ref:sfig-sspread-mets-cap) Outbreak durations (weeks with cases > 95th % of introductions) and their relationship to connectivity of villages across a range of campaign coverage and spatial coverage.
+
+
