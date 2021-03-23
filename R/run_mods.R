@@ -14,7 +14,7 @@ run_simrabid <- function(cand,
                          multi = FALSE, 
                          convolve_steps = TRUE, 
                          sim_vacc = "none", 
-                         ...) {
+                         routine_vacc = 0) {
   
   
   start_up <- setup_sim(start_date = cand$start_date, 
@@ -171,7 +171,7 @@ run_simrabid <- function(cand,
                                          break_threshold = cand$break_threshold,
                                          by_admin = cand$by_admin,
                                          extra_pars = extra_pars, 
-                                         ...)
+                                         routine_vacc = routine_vacc)
                     
                   
                     out <- merge_fun(simstats, t(pars), sim = j)

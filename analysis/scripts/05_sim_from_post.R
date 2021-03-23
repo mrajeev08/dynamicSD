@@ -1,6 +1,6 @@
 # Simulate from posteriors ---------
 
-# sub_cmd:=-t 2 -n 5 -jn psim -wt 1m -md \'gdal\' -ar \'1-2\' -cmd \'10\'
+# sub_cmd:=-t 2 -n 21 -jn psim -wt 1m -md \'gdal\' -ar \'1-24\' -cmd \'1e3\'
 
 arg <- commandArgs(trailingOnly = TRUE)
 
@@ -48,6 +48,7 @@ source("R/utils-data.R")
 source("R/summ_stats.R")
 source("R/run_mods.R")
 source("R/score_preds.R")
+source("R/conn_metrics.R")
 
 # candidate model to run ----
 cands_all <- fread(fp("analysis/out/candidates.csv"))
@@ -87,15 +88,18 @@ sd_case_data %>%
                                     origin_date = cand$start_date)) -> cases_by_month
 obs_data <- list(cases_by_month = cases_by_month)
 
+inds_dt <- expand.grid(v = 1:length(vacc_loop), 
+                       p = 1:length(post_loop))
+
 # run simulations ----
 out_post_sims <- 
-  foreach(i = seq_len(length(vacc_loop)),
-          .combine = comb, .multicombine = TRUE) %:%
-    foreach(j = seq_len(length(post_loop)), 
+    foreach(i = 1:nrow(inds_dt), 
             .combine = comb, .multicombine = TRUE) %do% {
       
+      inds <- inds_dt[i, ]
+      
       # posteriors
-      posts <- post_loop[[j]]
+      posts <- post_loop[[inds$p]]
       set.seed(cand$seed) # same posteriors by candidate
       posts <- posts[, sample(resp, nsims, prob = V1, replace = TRUE), by = "param"]
       posts <- split(posts$V1, posts$param)
@@ -106,7 +110,7 @@ out_post_sims <-
                            param_defaults = param_defaults,
                            nsims = nsims, 
                            extra_pars = list(obs_data = obs_data),
-                           vacc_dt = vacc_loop[[i]],
+                           vacc_dt = vacc_loop[[inds$v]],
                            combine_fun = 'rbind', 
                            summary_fun = ts_stats, 
                            merge_fun = data.table, 
@@ -114,6 +118,7 @@ out_post_sims <-
                            weight_covars = list(0), 
                            weight_params = list(0), 
                            multi = FALSE, 
+                           convolve_steps = TRUE, 
                            sim_vacc = "none") 
       
       out_scores <- get_tempstats(outs, obs_data, quants = c(0.5, 0.9), 
@@ -121,8 +126,8 @@ out_post_sims <-
       curve_scores <- out_scores$curve_scores
       out_scores <- out_scores$ts_scores
       outs$modname <- out_scores$modname <- curve_scores$modname <- cand_now
-      outs$vacc_type <- out_scores$vacc_type <- curve_scores$vacc_type <- names(vacc_loop)[i]
-      outs$post_type <- out_scores$post_type <- curve_scores$post_type <- names(post_loop)[j]
+      outs$vacc_type <- out_scores$vacc_type <- curve_scores$vacc_type <- names(vacc_loop)[inds$v]
+      outs$post_type <- out_scores$post_type <- curve_scores$post_type <- names(post_loop)[inds$p]
       
       list(sims = outs, scores = out_scores, curve_scores = curve_scores)
     }

@@ -82,22 +82,6 @@ conn_stats <- function(names = c("I_dt", "extra_pars",
   
 }
 
-# Function to apply to each column of *grid* level cov matrix ----
-conn_metric <- function(x, cell_ids, cov_threshold, rast) {
-  
-  # filter to cell_ids that have x > threshold
-  cells_now <- cell_ids[x >= cov_threshold]
-  
-  # get adjacency
-  adj_now <- adjacent(rast, cells_now, directions = 8, pairs = TRUE)
-  
-  adj_graph <- graph_from_data_frame(adj_now)
-  npatches <- components(adj_graph)$csize
-  conn <- sum(npatches^2)
-  return(conn)
-  
-}
-
 # Function to apply to each column of *vill* level cov matrix ----
 conn_metric_vill <- function(x, vill_ids, cov_threshold, adj_dt) {
   

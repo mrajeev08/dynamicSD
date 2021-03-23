@@ -11,7 +11,7 @@ set_up <- setup_cl(mpi = FALSE)
 # set up args and cluster if applicable ----
 vacc_ind <- ifelse(!set_up$slurm, 1, as.numeric(arg[1]))
 nsims <- ifelse(!set_up$slurm, 5, as.numeric(arg[2]))
-sim_vacc <- "random"
+sim_vacc <- "fixed"
 
 cl <- make_cl(set_up$ncores)
 register_cl(cl)
@@ -178,7 +178,7 @@ out_post_sims <-
           }
 
 # Write out results & close ----
-file_pref <- paste0("analysis/out/int_sims/")
+file_pref <- paste0("analysis/out/int_sims/", sim_vacc, "_")
 
 write_create(out_post_sims,
              fp(paste0(file_pref, int_name, ".csv")),

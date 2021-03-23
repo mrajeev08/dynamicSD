@@ -1,6 +1,6 @@
 # Simulate from vaccination campaigns -------
 
-# sub_cmd:=-t 6 -n 12 -jn camps -wt 1m -md \'gdal\' -ar \'1-2\' -cmd \'100\' -sn
+# sub_cmd:=-t 8 -n 16 -jn camps -wt 1m -md \'gdal\' -ar \'1\' -cmd \'100\' -sn
 
 arg <- commandArgs(trailingOnly = TRUE)
 
