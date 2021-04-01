@@ -67,7 +67,3 @@ ggplot(sd_shapefile) +
 fig1 <- case_ts_a + case_map_b + vacc_ts_c + census_data_d
   
 ggsave("analysis/figs/fig_data.jpeg", height = 8, width = 8)
-
-
-
-

@@ -9,6 +9,7 @@ library(dplyr)
 library(magrittr)
 library(glue)
 library(ggtext)
+library(patchwork)
 source("R/utils.R")
 source("R/figure_funs.R")
 
@@ -91,7 +92,7 @@ err_plot_supp <-
   scale_linetype_discrete(labels = ppars$run_labs, name = "Model run") + 
   scale_color_brewer(palette = "Dark2", labels = ppars$scale_labs, name = "Model scale") +
   ppars$theme_proj() +
-  labs(x = "Number of trees", y = "Prior error rate")
+  labs(x = "Number of trees", y = "Out-of-bag error rate")
 
 # model ranks -----
 out_all$mod_predicted %>%
@@ -110,7 +111,8 @@ model_ranks_supp <-
                     name = "Model scale") +
   ppars$theme_proj() +
   labs(x = "Movement", y = "Votes (% of trees that \n selected given model)")
-write_csv(mod_predicted, "analysis/out/mod_comp/summary.csv")
+write_csv(mod_predicted, "analysis/out/mod_summary.csv")
+ggsave("analysis/figs/sfig_mod_ranks.jpeg", model_ranks_supp)
 
 # lda plots ----
 mod_predicted %>%
@@ -146,7 +148,14 @@ lda_main <-
   ppars$theme_proj() +
   labs(x = "LD Axis 1", y = "LD Axis 2")
 
-# supplementary plot with hex bins showing all comparisons
+
+mfig_mod <- 
+  (lda_main | var_importance_plot_main) + 
+  plot_layout(tag_level = "new") +
+  plot_annotation(tag_levels = 'A')
+ggsave("analysis/figs/mfig_mod.jpeg", mfig_mod, width  = 8, height = 8)
+
+# supplementary plot with hex bins showing all comparisons ====
 lda_preds %>%
   mutate(scale = case_when(scale == "grid" ~ "1x1 km",
                            scale == "vill" ~ "Village"), 
@@ -168,6 +177,13 @@ lda_supp <-
   scale_fill_brewer(palette = "Dark2", 
                      labels = ppars$scale_labs, 
                      name = "Model scale") +
-  facet_grid(limits ~ interaction(move, incs)) + 
-  cowplot::theme_half_open(font_size = 12)
+  facet_grid(limits ~ interaction(move, incs), 
+             labeller = label_wrap_gen(10)) + 
+  cowplot::theme_half_open(font_size = 10)
+
+# Output all supp figures ----
+
+ggsave("analysis/figs/sfig_mod_lda.jpeg", lda_supp)
+ggsave("analysis/figs/sfig_mod_vimp.jpeg", var_importance_plot_supp)
+ggsave("analysis/figs/sfig_mod_err.jpeg", err_plot_supp)
 

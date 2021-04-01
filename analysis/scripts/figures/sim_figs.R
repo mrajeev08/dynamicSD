@@ -10,14 +10,18 @@ library(magrittr)
 library(glue)
 library(ggtext)
 library(tidytext)
+library(lubridate)
 source("R/utils.R")
 source("R/figure_funs.R")
 
 # params for plotting
 ppars <- plotpars()
+date_brks <- seq(0, 228, by = 24)
+date_labs <- format(seq(ymd('2002-01-01'), ymd('2020-12-31'), by='24 months'), "%Y")
 
 # get best models at each scale
-mod_predicted <- read_csv("analysis/out/mod_comp/summary.csv")
+# get best models at each scale
+mod_predicted <- read_csv("analysis/out/mod_summary.csv")
 mod_predicted %>%
   filter(type == 'full') %>%
   group_by(scale) %>% 
@@ -71,7 +75,10 @@ all_post_sims_joint <-
   geom_line(data = case_ts, aes(x = cal_month, y = cases), col = "black") +
   scale_color_manual(values = c("#d95f02", "#7570b3"), 
                      name = "") + 
-  facet_wrap(scale ~ incs, scales = "free")
+  facet_wrap(scale ~ incs, scales = "free") +
+  scale_x_continuous(breaks = date_brks, labels = date_labs) +
+  cowplot::theme_half_open(font_size = 12) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
 all_post_sims_full <-
   ggplot(sims_vacc[post_type == "full"]) +
@@ -85,7 +92,12 @@ all_post_sims_full <-
   geom_line(data = case_ts, aes(x = cal_month, y = cases), col = "black") +
   scale_color_manual(values = c("#d95f02", "#7570b3"), 
                      name = "") + 
-  facet_wrap(scale ~ incs, scales = "free")
+  facet_wrap(scale ~ incs, scales = "free") +
+  scale_x_continuous(breaks = date_brks, labels = date_labs) +
+  cowplot::theme_half_open(font_size = 12) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(x = "", y = "Cases")
+
 
 # comparing scores (all supp) ----
 score_crps <-
@@ -95,8 +107,11 @@ score_crps <-
                 color = scale)) +
   scale_color_brewer(palette = "Dark2", labels = ppars$scale_labs, name = "Model scale") +
   facet_grid(post_type ~ incs, scales = "free") +
-  cowplot::theme_half_open()
-
+  scale_x_continuous(breaks = date_brks, labels = date_labs) +
+  cowplot::theme_half_open(font_size = 12) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(x = "", y = "CRPS")
+  
 
 score_dss <-
   ggplot(sims_vacc) +
@@ -105,8 +120,10 @@ score_dss <-
                 color = scale)) +
   scale_color_brewer(palette = "Dark2", labels = ppars$scale_labs, name = "Model scale") +
   facet_grid(post_type ~ incs, scales = "free") +
-  cowplot::theme_half_open(font_size = 12)
-
+  scale_x_continuous(breaks = date_brks, labels = date_labs) +
+  cowplot::theme_half_open(font_size = 12) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(x = "", y = "DSS")
 
 # getting endemic sims -----
 out_endemic <- rbindlist(lapply(fp_sims, function(x) {
@@ -129,7 +146,12 @@ endemic_sims_all <-
   facet_grid(post_type ~ incs, scales = "free") +
   scale_color_brewer(palette = "Dark2", 
                      labels = ppars$scale_labs, 
-                     name = "Model scale")
+                     name = "Model scale") +
+  scale_x_continuous(breaks = date_brks, labels = date_labs) +
+  cowplot::theme_half_open(font_size = 12) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(x = "", y = "Proportion of sims with \n pop decline > 15 %")
+
 # best ----
 chosen %>%
   mutate(chosen_names = interaction(move, incs, scale, limits)) %$%
@@ -150,9 +172,13 @@ best_posts_joint <-
                 color = score_type)) +
   scale_color_manual(values = c("#d95f02", "#7570b3"), 
                      name = "") + 
+  scale_x_discrete(breaks = seq(0, 228, 12), 
+                   labels = ) + 
   geom_line(data = case_ts, aes(x = cal_month, y = cases), col = "black") +
-  facet_wrap(scale ~ incs, scales = "free") +
-  ppars$theme_proj()
+  facet_wrap(scale ~ incs, scales = "fixed", ncol = 1) +
+  
+  ppars$theme_proj() +
+  labs(x = "", y = "Cases")
 
 count_endemic <- count_endemic[interaction(move, incs, scale, limits) %in% cnames]
 
@@ -164,13 +190,14 @@ best_endemic_prop <-
                      labels = ppars$scale_labs, 
                      name = "Model scale") + 
   ppars$theme_proj() +
-  labs(x = "Month", y = "Proportiong of sims with \n pop decline > 15 %")
+  scale_x_continuous(breaks = date_brks, labels = date_labs) +
+  labs(x = "", y = "Proportion of sims with \n pop decline > 15 %")
 
-# If time = figure with those stopped filtered out
+# out figs
 
-
-gg_names <- ls()
-is_gg <- unlist(lapply(gg_names, function(x) is.ggplot(get(x))))
-gg_names <- gg_names[is_gg]
-lapply(gg_names, function(x) ggsave(paste0("analysis/figs/", x, ".jpeg"), 
-                                    get(x), width = 8, height = 8))
+ggsave("analysis/figs/mfig_sims_best.jpeg", best_posts_joint)
+ggsave("analysis/figs/sfig_sims_endemic.jpeg", best_endemic_prop) 
+ggsave("analysis/figs/sfig_sims_full.jpeg", all_post_sims_full)
+ggsave("analysis/figs/sfig_sims_joint.jpeg", all_post_sims_joint)
+ggsave("analysis/figs/sfig_sims_crps.jpeg", score_crps)
+ggsave("analysis/figs/sfig_sims_dss.jpeg", score_dss)

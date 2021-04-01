@@ -1,26 +1,7 @@
-# Modeling rabies dynamics in the Serengeti
+# Modeling rabies dynamics in the Serengeti District, Tanzania
 
-## Using `simrabid` for IBM
+Chapter 4 of Dissertation: work in progress!
 
-``` r
-```
+See [mrajeev08/simrabid](github.com/mrajeev08/simrabid) for more details on the model.
 
-## Organization
-
-## Analyses
-
-1. Fitting to Serengeti data
-
-2. Simulating from posteriors
-
-3. Connectivity and coverage
-
-4. Interventions
-
-5. Fitting alpha
-
-6. Non-random movement/processes
-
-7. POMP
-
-8. Sensitivity analyses
+See [mrajeev08/dissertation](github.com/mrajeev08/dissertation) for the draft in the context of the dissertation.

@@ -1,5 +1,6 @@
 # stats for paper ----
 
+library(here)
 library(data.table)
 library(dplyr)
 library(magrittr)
@@ -11,18 +12,18 @@ library(lubridate)
 # study area
 sd_shapefile <- st_read(system.file("extdata/sd_shapefile.shp", 
                                     package = "simrabid"))
-load("data/sd_census_data.rda")
-load("data/sd_vacc_data.rda")
-load("data/incursions.rda")
-load("data/sd_case_data.rda")
+load(here("data/sd_census_data.rda"))
+load(here("data/sd_vacc_data.rda"))
+load(here("data/incursions.rda"))
+load(here("data/sd_case_data.rda"))
 
 # source
-source("R/sd_data.R")
-source("R/utils-data.R")
+source(here("R/sd_data.R"))
+source(here("R/utils-data.R"))
 
 # stats on human pop and the district
 human_pop_2012 <- round(sum(sd_shapefile$pop_2012), -3)
-sd_size_km2 <- round(sqrt(st_area(st_combine(sd_shapefile))/1000), -2)
+sd_size_km2 <- round(sqrt(as.numeric(st_area(st_combine(sd_shapefile)))/1000), -2)
 
 # get the startup space
 out <- get_sd_pops(sd_shapefile, res_m = 1000,

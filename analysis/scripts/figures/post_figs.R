@@ -17,7 +17,7 @@ source("R/figure_funs.R")
 ppars <- plotpars()
 
 # get best models at each scale
-mod_predicted <- read_csv("analysis/out/mod_comp/summary.csv")
+mod_predicted <- read_csv("analysis/out/mod_summary.csv")
 mod_predicted %>%
   filter(type == 'full') %>%
   group_by(scale) %>% 
@@ -103,8 +103,8 @@ err_plot_supp <-
   scale_linetype_discrete(labels = ppars$run_labs, name = "Model run") + 
   scale_color_brewer(palette = "Dark2", labels = ppars$scale_labs, name = "Model scale") +
   cowplot::theme_half_open(font_size = 12) +
-  facet_grid(param ~ incs, scales = "free") + 
-  labs(x = "Number of trees", y = "Prior error rate")
+  facet_grid(param ~ incs, scales = "free", labeller = param_labeller) + 
+  labs(x = "Number of trees", y = "Out-of-bag error rate")
 
 # Table of parameter estimates ---
 out_all$stats %<>%
@@ -113,7 +113,7 @@ out_all$stats %<>%
                           nsim > 0 ~ "se")) %>%
   filter(interaction(param, incs) != "iota.Fixed", 
          type == "full") -> par_stats
-write_csv(par_stats, "analysis/out/par_ests/par_stats.csv")
+write_csv(par_stats, "analysis/out/par_stats.csv")
 
 # Priors vs. posteriors ---- 
 posts <- out_all$preds
@@ -194,6 +194,17 @@ chosen %>%
          
 posts_best <- posts_all[ interaction(move, incs, scale, limits) %in% cnames]
 
+posts_best$param <- factor(posts_best$param, levels = c("R0", "iota", "k"))
+posts_best$param <- forcats::fct_recode(posts_best$param,
+                                        `R[0]` = "R0", 
+                                        `iota` = "iota",
+                                        `k` = "k")
+prior_dens$param <- factor(prior_dens$param, levels = c("R0", "iota", "k"))
+prior_dens$param <- forcats::fct_recode(prior_dens$param,
+                                        `R[0]` = "R0", 
+                                        `iota` = "iota",
+                                        `k` = "k")
+
 post_best_fig <-
   ggplot() + 
   geom_density(data = prior_dens, 
@@ -206,5 +217,18 @@ post_best_fig <-
                                        post_type), 
                    fill = post_type), alpha = 0.5, color = NA) +
   scale_fill_brewer(palette = "Set1", name = "Posterior type") +
-  facet_wrap(param ~ scale, scales = "free", ncol = 2) +
-  cowplot::theme_half_open(font_size = 12)
+  facet_wrap(param ~ scale, scales = "free", ncol = 2, 
+             labeller = labeller(param = label_parsed)) +
+  cowplot::theme_half_open(font_size = 12) +
+  labs(x = "Parameter estimate", y = "Density")
+
+# out all figs ----
+ggsave("analysis/figs/mfig_posts_best.jpeg", post_best_fig)
+ggsave("analysis/figs/mfig_posts_vimp.jpeg", var_importance_plot_best)
+
+# supplementary
+
+ggsave("analysis/figs/sfig_posts_vimpgr.jpeg", var_importance_grouped)
+ggsave("analysis/figs/sfig_posts_err.jpeg", err_plot_supp)
+ggsave("analysis/figs/sfig_posts_jntvsfull.jpeg", joint_vs_full)
+

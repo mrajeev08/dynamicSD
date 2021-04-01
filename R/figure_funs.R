@@ -41,7 +41,7 @@ plotpars <- function() {
   # model run labs (i.e. full or subsampled)
   run_labs <- c("Full simulation set", "Subsampled set (75%, N = 3)")
   names(run_labs) <- c("full", "se")
-  fct_incs <- c("Introductions \n estimated", "Introductions \n hardwired")
+  fct_incs <- c("Introductions \n estimated", "Introductions \n fixed")
   names(fct_incs) <- c("Estimated", "Fixed")
   
   as.list.environment(environment())
