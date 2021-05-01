@@ -146,6 +146,9 @@ inc_stats <- function(names = c("I_dt", "ncells", "tmax", "extra_pars",
   kb_temp <- kb_stat(obs_data$cases_by_month, I_ts)
   kb_spat <- kb_stat(obs_data$cases_by_cell, I_cell)
   
+  noise_pars <- runif(5)
+  names(noise_pars) <- paste0("noise", 1:5)
+  
   # out data.table
   return(data.table(max_I, median_I, mean_I, kb_temp, kb_spat,
                     mean_dist_4wks, mean_dist_8wks, 
@@ -154,6 +157,7 @@ inc_stats <- function(names = c("I_dt", "ncells", "tmax", "extra_pars",
                     temp_rmse, temp_loss, 
                     mean_dist_all,
                     t(acfs), t(acfs_week), 
+                    t(noise_pars), 
                     prop_start_pop, break_threshold, 
                     stopped)) 
 
@@ -291,8 +295,8 @@ times_linked <- function(I_dt) {
 kb_stat <- function(x, y) {
   
   pmax <- max(c(x, y))
-  px <- tabulate(x, pmax)/sum(x)
-  py <- tabulate(y, pmax)/sum(y)
+  px <- tabulate(x, pmax)/length(x) # prob of a given observation
+  py <- tabulate(y, pmax)/length(y)
   
   sum(exp(px) * (log(exp(px) / exp(py))))
 

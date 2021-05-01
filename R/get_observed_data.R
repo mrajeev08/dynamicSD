@@ -42,7 +42,7 @@ get_observed_data <- function(sd_case_data, cand, out) {
                   infected, detected, cell_id) %>%
     as.data.table() -> I_dt
   
-  # apply summary functions to the observed data
+  # apply summary functions to the observed data (will also generate 5 noise stats)
   obs_sstats <- inc_stats()
   
   return(list(obs_data = extra_pars$obs_data, obs_sstats = obs_sstats))
