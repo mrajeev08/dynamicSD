@@ -68,6 +68,7 @@ param_ests <- estimate_pars(reftable = reftl,
                             obs_data = obs_data, 
                             ntree = 500, 
                             predict = TRUE, 
+                            predict_nsimul = 1000,
                             return_training = FALSE)
 
 write_create(param_ests, 
