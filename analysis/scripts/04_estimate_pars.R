@@ -40,7 +40,7 @@ sd_shapefile <- st_read(system.file("extdata/sd_shapefile.shp",
                                     package = "simrabid"))
 load("data/sd_census_data.rda")
 load("data/sd_vacc_data.rda")
-load("data/incursions.rda")
+load(fp("analysis/out/incursions.csv"))
 load("data/sd_case_data.rda")
 
 # for getting observed data (just the dummy way) ----
@@ -66,7 +66,7 @@ param_ests <- estimate_pars(reftable = reftl,
                             ncores = set_up$ncores, 
                             paral = TRUE, 
                             obs_data = obs_data, 
-                            ntree = 500, 
+                            ntree = 1000, 
                             predict = TRUE, 
                             predict_nsimul = 1000,
                             return_training = FALSE)
@@ -82,7 +82,7 @@ param_ests_se <- estimate_par_se(reftable = reftl,
                                   ncores = set_up$ncores, 
                                   paral = TRUE, 
                                   obs_data = obs_data, 
-                                  ntree = 500, 
+                                  ntree = 1000, 
                                   predict = TRUE, 
                                   samp_prop = 0.75, 
                                   nsims = 3)

@@ -10,14 +10,13 @@ estimate_pars <- function(reftable,
                           predict_nsimul = 100,
                           return_training = FALSE) {
   
-
+    
     reftab <- reftable[, !c(exclude), with = FALSE]
     
     modname <- unique(reftab$modname)
     
-    if(length(modname) > 1) message("Warning: attempting to estimate params with more than one model!")
-    modname <- modname[1]
-    
+    if(length(modname) > 1) stop("Attempting to estimate params with more than one model!")
+
     reftab <- reftab[, !"modname", with = FALSE]
     
     if(sampsize < nrow(reftable)) {
@@ -51,12 +50,15 @@ estimate_pars <- function(reftable,
           out_stats <- predict(par_obj, obs = obs_data, 
                                training = reftab_i, 
                                paral = paral, ncores = ncores,
-                               ntree = ntree)
+                               ntree = ntree, 
+                               rf.weights = TRUE,
+                               post.err.med = TRUE)
           
-          out_stats <- do.call(cbind, (lapply(out_stats, data.table)))
-          setnames(out_stats, c("expectation", "median", "variance", 
+          out_stats <- as.data.table(out_stats)
+          setnames(out_stats, c("expectation", "median", "variance_postmse", 
                                 "variance_cdf", "quantile_0.025", 
-                                "quantile_0.975", "post_nmae"))
+                                "quantile_0.975", "post_nmae_mean", 
+                                "post_mse_med", "post_nmae_med"))
          
         } else {
           out_preds <- out_stats <- NULL
@@ -67,7 +69,7 @@ estimate_pars <- function(reftable,
                                training = reftab_i, 
                                paral = paral, ncores = ncores,
                                ntree = ntree)
-          preds_simul <- do.call(cbind, (lapply(preds_simul, data.table)))
+          preds_simul <- as.data.table(preds_simul)
           setnames(preds_simul, c("expectation", "median", "variance", 
                                 "variance_cdf", "quantile_0.025", 
                                 "quantile_0.975", "post_nmae"))

@@ -30,21 +30,23 @@ fp <- function(x) paste0(fpath, x)
 
 # combine files
 test <- list.files(fpath)
+test <- test[grep(".rds", test)]
 out_all <- lapply(test, function(x) {
   reslt <- readRDS(fp(x)) 
   reslt <-lapply(reslt, append_col, col_name = "type", val = x)
 }
 )
+
 out_all <- do.call(c, out_all)
 out_names <- unique(names(out_all))
 out_all <-
   lapply(out_names, 
          function(x) {
            tt <- rbindlist(out_all[names(out_all) == x], fill = TRUE)
-           if(nrow(tt) > 0) {
+           if(nrow(tt) > 0 & !(x %in% "preds_test")) {
              setnafill(tt, cols = "nsim", fill = 0)
-             tt
            }
+           tt
          }
   )
 names(out_all) <- out_names
@@ -93,6 +95,13 @@ err %<>%
   mutate(type = case_when(nsim == 0 ~ "full", 
                           nsim > 0 ~ "se")) %>%
   filter(interaction(param, incs) != "iota.Fixed")
+err$param <- factor(err$param, levels = c("R0", "iota", "k"))
+err$param <- forcats::fct_recode(err$param,
+                                 `R[0]` = "R0", 
+                                 `iota` = "iota",
+                                 `k` = "k")
+err$type[is.na(err$type)] <- "full"
+err$nsim[is.na(err$nsim)] <- 0
 
 err_plot_supp <-
   ggplot(err) + 
@@ -103,11 +112,11 @@ err_plot_supp <-
   scale_linetype_discrete(labels = ppars$run_labs, name = "Model run") + 
   scale_color_brewer(palette = "Dark2", labels = ppars$scale_labs, name = "Model scale") +
   cowplot::theme_half_open(font_size = 12) +
-  facet_grid(param ~ incs, scales = "free", labeller = param_labeller) + 
+  facet_grid(param ~ incs, scales = "free", labeller = labeller(param = label_parsed)) + 
   labs(x = "Number of trees", y = "Out-of-bag error rate")
 
 # Table of parameter estimates ---
-out_all$stats %<>%
+out_all$stats %>%
   left_join(ppars$mod_labs) %>%
   mutate(type = case_when(nsim == 0 ~ "full", 
                           nsim > 0 ~ "se")) %>%
@@ -120,9 +129,16 @@ posts <- out_all$preds
 posts <- posts[data.table(ppars$mod_labs), on = "modname"]
 posts <- posts[interaction(param, incs) != "iota.Fixed"]
 posts[, type := ifelse(nsim == 0, "full", "se")]
+posts$param <- factor(posts$param, levels = c("R0", "iota", "k"))
+posts$param <- forcats::fct_recode(posts$param,
+                                       `R[0]` = "R0", 
+                                       `iota` = "iota",
+                                       `k` = "k")
+
 post_dens <- posts[, as.list(density(resp, weights = V1)[c("x", "y")]), 
                    by = c("param", "move", "incs", "scale",
                           "limits", "nsim", "type")]
+
 prior_dens <- posts[, as.list(density(resp)[c("x", "y")]), 
                     by = c("param", "move", "incs", "scale",
                            "limits", "nsim", "type")]
@@ -139,7 +155,7 @@ full_posts <-
                    linetype = incs)) +
   scale_linetype(name = "Introductions") +
   scale_color_discrete(name = "Model movement") +
-  facet_wrap(param ~ scale, scales = "free", ncol = 2) 
+  facet_wrap(param ~ scale, scales = "free", ncol = 2, labeller = labeller(param = label_parsed)) 
 
 
 post_joint <- posts[, .(check = all(V1 > 0)), 
@@ -151,6 +167,16 @@ post_joint_dens <- post_joint[, as.list(density(resp,
                                                 weights = V1/sum(V1))[c("x", "y")]), 
                          by = c("param", "move", "incs", "scale",
                                 "limits", "nsim", "type")]
+posts_sample <- post_joint_dens[, sample(x, 1e4, prob = y, replace = TRUE), 
+                                by = c("param", "move", "incs", "scale",
+                                      "limits", "nsim", "type")]
+par_stats_joint <- posts_sample[, .(mean = mean(V1), 
+                                     median = median(V1), 
+                                     quantile_0.975 = quantile(V1, 0.975), 
+                                     quantile_0.025 = quantile(V1, 0.025)), 
+                                 by = c("param", "move", "incs", "scale",
+                                        "limits", "nsim", "type")]
+write_csv(par_stats, "analysis/out/par_stats_joint.csv")
 
 joint_posts <-
   ggplot() + 
@@ -160,12 +186,13 @@ joint_posts <-
                    fill = "grey", color = "NA", alpha = 0.5) +
   geom_density(data = post_joint_dens, 
                aes(x = x, weight = y, 
-                   group = interaction(nsim, param, move, limits, scale), 
+                   group = interaction(nsim, param, type, move, incs, limits, scale), 
                    color = interaction(move, limits), 
                    linetype = incs)) +
   scale_linetype(name = "Introductions") +
   scale_color_discrete(name = "Model movement") +
-  facet_wrap(param ~ scale, scales = "free", ncol = 2) 
+  facet_wrap(param ~ scale, scales = "free", ncol = 2, 
+             labeller = labeller(param = label_parsed)) 
 
 posts_all <-
   rbind(post_joint_dens[type == "full"][, post_type := "Joint"],
@@ -185,7 +212,7 @@ joint_vs_full <-
                    linetype = incs)) +
   scale_linetype(name = "Introductions") +
   scale_color_brewer(palette = "Set1", name = "Posterior type") +
-  facet_wrap(param ~ scale, scales = "free", ncol = 2) +
+  facet_wrap(param ~ scale, scales = "free", ncol = 2, labeller = labeller(param = label_parsed)) +
   cowplot::theme_half_open(font_size = 12)
 
 chosen %>%
@@ -193,17 +220,6 @@ chosen %>%
   chosen_names -> cnames
          
 posts_best <- posts_all[ interaction(move, incs, scale, limits) %in% cnames]
-
-posts_best$param <- factor(posts_best$param, levels = c("R0", "iota", "k"))
-posts_best$param <- forcats::fct_recode(posts_best$param,
-                                        `R[0]` = "R0", 
-                                        `iota` = "iota",
-                                        `k` = "k")
-prior_dens$param <- factor(prior_dens$param, levels = c("R0", "iota", "k"))
-prior_dens$param <- forcats::fct_recode(prior_dens$param,
-                                        `R[0]` = "R0", 
-                                        `iota` = "iota",
-                                        `k` = "k")
 
 post_best_fig <-
   ggplot() + 
@@ -222,13 +238,45 @@ post_best_fig <-
   cowplot::theme_half_open(font_size = 12) +
   labs(x = "Parameter estimate", y = "Density")
 
+# Ability to recover all params
+test_preds <- out_all$preds_test
+
+test_preds %<>%
+  left_join(ppars$mod_labs) %>%
+  filter(interaction(param, incs) != "iota.Fixed")
+test_preds$param <- factor(test_preds$param, levels = c("R0", "iota", "k"))
+test_preds$param <- forcats::fct_recode(test_preds$param,
+                                       `R[0]` = "R0", 
+                                       `iota` = "iota",
+                                       `k` = "k")
+
+test_preds %>%
+  filter(interaction(move, incs, scale, limits) %in% cnames) -> test_preds_best
+
+test_param_recovery <-
+  ggplot(test_preds) + 
+  geom_pointrange(aes(x = true_val, y = expectation,
+                      ymin = quantile_0.025, ymax = quantile_0.975, 
+                      color = move, shape = incs),
+               alpha = 0.5) +
+  scale_shape(name = "Introductions") +
+  scale_color_discrete(name = "Model movement") +
+  facet_wrap(param ~ scale, scales = "free", ncol = 2, labeller = labeller(param = label_parsed)) 
+
+test_param_recovery_best <-
+  ggplot(test_preds_best) + 
+  geom_pointrange(aes(x = true_val, y = expectation,
+                      ymin = quantile_0.025, ymax = quantile_0.975),
+                  alpha = 0.5) +
+  facet_wrap(param ~ scale, scales = "free", ncol = 2, labeller = labeller(param = label_parsed)) 
+
 # out all figs ----
 ggsave("analysis/figs/mfig_posts_best.jpeg", post_best_fig)
 ggsave("analysis/figs/mfig_posts_vimp.jpeg", var_importance_plot_best)
 
 # supplementary
-
 ggsave("analysis/figs/sfig_posts_vimpgr.jpeg", var_importance_grouped)
 ggsave("analysis/figs/sfig_posts_err.jpeg", err_plot_supp)
 ggsave("analysis/figs/sfig_posts_jntvsfull.jpeg", joint_vs_full)
 
+# Plus also summary table from joint and full
