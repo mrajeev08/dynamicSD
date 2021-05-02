@@ -19,7 +19,8 @@ pars <- data.frame(track = FALSE,
                    death_rate = 0.465, 
                    days_in_step = 7, 
                    waning = 1/3,
-                   start_date = "2002-01-01")
+                   start_date = "2002-01-01",
+                   apprx_end_date = "2020-12-31")
 
 # candidate df to write out
 cand <- tidyr::expand_grid(sequential = c(TRUE, FALSE),
@@ -31,8 +32,6 @@ cand <- tidyr::expand_grid(sequential = c(TRUE, FALSE),
 cand %<>% 
   mutate(allow_invalid = case_when(weights == TRUE ~ FALSE, 
                                    weights == FALSE ~ TRUE), 
-         apprx_end_date = case_when(estincs == TRUE ~ "2020-12-31", 
-                              estincs == FALSE ~ "2015-12-31"), 
          exclude = !weights & !leave_bounds) %>%
   filter(!exclude)
 
