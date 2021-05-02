@@ -296,6 +296,7 @@ kb_stat <- function(x, y) {
   
   pmax <- max(c(x, y))
   px <- tabulate(x, pmax)
+  py <- tabulate(y, pmax)
   px <- px/sum(px) # scale to 1
   py <- py/sum(py) # scale to 1
   
