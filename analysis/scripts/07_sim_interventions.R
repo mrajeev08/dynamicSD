@@ -92,20 +92,27 @@ int_ind <- ifelse(!set_up$slurm, 1, as.numeric(arg[1]))
 
 # reducing superspreading (as district coverage increased limit transmission)
 if(int_ind == 1) {
-  nbinom_constrained <- function (n, params = list(R0 = 1.2, 
-                                                   k = 1,
-                                                   max_secondaries = 100), 
-                                  names = c("S", "N")) {
+  nbinom_constrained_min <- function(n, 
+                                     names = c("I_now", "S", "N"),
+                                     params = list(R0 = 1.2, k = 1, 
+                                                   max_secodndaries = 100, 
+                                                   min_secondaries = 1)) {
     
-    # get S/N 
+    # get S/N/I_now
     list2env(use_mget(names, envir_num = 2), envir = environment())
     
+    inds <- I_now$progen_id == -1L
+     
     # prop reduction
     prop_sus <- sum(S)/sum(N)
     if(prop_sus < 0.2) prop_sus <- 0.2
     lims <- params$max_secondaries * prop_sus^2
     secondaries <- rnbinom(n, size = params$k, mu = params$R0)
-    secondaries[secondaries > lims] <- round(lims) # out integer 
+    secondaries[secondaries > lims] <- round(lims) # out integer
+    
+    # make sure intros seed at least one case still!
+    secondaries[inds & secondaries == 0] <- params$min_secondaries
+    
     return(secondaries)
     
   }
@@ -165,7 +172,7 @@ out_post_sims <-
                                  combine_fun = 'rbind', 
                                  summary_fun = conn_stats, 
                                  merge_fun = data.table, 
-                                 secondary_fun = nbinom_constrained,
+                                 secondary_fun = nbinom_constrained_min,
                                  weight_covars = list(0), 
                                  weight_params = list(0), 
                                  multi = FALSE,

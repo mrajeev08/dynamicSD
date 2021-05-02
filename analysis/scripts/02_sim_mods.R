@@ -77,7 +77,7 @@ out_sims <- run_simrabid(cand = cand,
                          combine_fun = 'rbind', 
                          summary_fun = inc_stats, 
                          merge_fun = data.table,
-                         secondary_fun = nbinom_constrained,
+                         secondary_fun = nbinom_constrained_min,
                          weight_covars = list(0), 
                          weight_params = list(0))  
 

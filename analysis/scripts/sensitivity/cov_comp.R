@@ -78,7 +78,7 @@ system.time({
                      observe_fun = beta_detect_monthly,
                      serial_fun = serial_lognorm,
                      dispersal_fun = steps_weibull, 
-                     secondary_fun = nbinom_constrained, # function argument 
+                     secondary_fun = nbinom_constrained_min, # function argument 
                      incursion_fun = sim_incursions_pois, 
                      movement_fun = sim_movement_continuous,
                      sequential = TRUE,
@@ -114,7 +114,7 @@ system.time({
                      observe_fun = beta_detect_monthly,
                      serial_fun = serial_lognorm,
                      dispersal_fun = steps_weibull, 
-                     secondary_fun = nbinom_constrained, # function argument 
+                     secondary_fun = nbinom_constrained_min, # function argument 
                      incursion_fun = sim_incursions_pois, 
                      movement_fun = sim_movement_continuous,
                      sequential = TRUE,
