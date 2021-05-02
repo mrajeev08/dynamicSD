@@ -23,7 +23,6 @@ sd_shapefile <- st_read(system.file("extdata/sd_shapefile.shp",
 sd_census <- read_csv(get_latest("data-raw/wisemonkey", "Census"))
 case_dt <- read_csv(get_latest("data-raw/wisemonkey", "Animal_Contact_Tracing"))
 vacc_dt <- read_csv(get_latest("data-raw/wisemonkey", "Vaccination"))
-inc_dt <- read_csv("data-raw/incursions.csv")
 sd_pops <- read_csv("data-raw/SerengetiPop.csv")
 
 # Clean census data and out neccessary bits -----

@@ -15,7 +15,7 @@ sd_shapefile <- st_read(system.file("extdata/sd_shapefile.shp",
                                     package = "simrabid"))
 load("data/sd_census_data.rda")
 load("data/sd_vacc_data.rda")
-load("data/incursions.rda")
+load(fp("analysis/out/incursions.csv"))
 load("data/sd_case_data.rda")
 
 # source

@@ -1,12 +1,7 @@
 # param fig
 
 library(ggplot2)
-
-
-# Set up priors from hampson et al. 2009
-priors <- list(R0 = function(n) exp(rnorm(n, mean = 0.2, sd = 0.2)), # centered around 1.2
-               iota = function(n) exp(rnorm(n, mean = 0, sd = 0.5)), # centered around 1 / week
-               k = function(n) exp(rnorm(n, mean = 0.25, sd = 0.5))) # centered around 1.3 
+priors <- readRDS(fp("analysis/out/priors.rds"))
 
 set.seed(125)
 prior_dists <- data.table(R0 = priors$R0(1e5), 

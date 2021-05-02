@@ -39,7 +39,7 @@ sd_shapefile <- st_read(system.file("extdata/sd_shapefile.shp",
                                     package = "simrabid"))
 load("data/sd_census_data.rda")
 load("data/sd_vacc_data.rda")
-load("data/incursions.rda")
+load(fp("analysis/out/incursions.csv"))
 load("data/sd_case_data.rda")
 
 # source other scriptss
@@ -102,8 +102,8 @@ if(int_ind == 1) {
     
     # prop reduction
     prop_sus <- sum(S)/sum(N)
-    if(prop_sus < 0.3) prop_sus <- 0.3
-    lims <- params$max_secondaries * prop_sus
+    if(prop_sus < 0.2) prop_sus <- 0.2
+    lims <- params$max_secondaries * prop_sus^2
     secondaries <- rnbinom(n, size = params$k, mu = params$R0)
     secondaries[secondaries > lims] <- round(lims) # out integer 
     return(secondaries)

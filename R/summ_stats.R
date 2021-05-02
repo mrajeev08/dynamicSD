@@ -295,8 +295,9 @@ times_linked <- function(I_dt) {
 kb_stat <- function(x, y) {
   
   pmax <- max(c(x, y))
-  px <- tabulate(x, pmax)/length(x) # prob of a given observation
-  py <- tabulate(y, pmax)/length(y)
+  px <- tabulate(x, pmax)
+  px <- px/sum(px) # scale to 1
+  py <- py/sum(py) # scale to 1
   
   sum(exp(px) * (log(exp(px) / exp(py))))
 

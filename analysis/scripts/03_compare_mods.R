@@ -37,8 +37,8 @@ sd_shapefile <- st_read(system.file("extdata/sd_shapefile.shp",
                                     package = "simrabid"))
 load("data/sd_census_data.rda")
 load("data/sd_vacc_data.rda")
-load("data/incursions.rda")
 load("data/sd_case_data.rda")
+load(fp("analysis/out/incursions.csv"))
 
 # for getting observed data
 cand <- fread(fp("analysis/out/candidates.csv"))[1, ]
@@ -63,7 +63,7 @@ foreach(i = seq_len(length(scale))) %do% {
                            exclude = c("stopped", "sim", "break_threshold",
                                        "prop_start_pop"),
                            obs_data = obs_data, 
-                           ntree = 500, 
+                           ntree = 1000, 
                            ncores = set_up$ncores, 
                            paral = TRUE,
                            predict = TRUE, 
@@ -80,7 +80,7 @@ foreach(i = seq_len(length(scale))) %do% {
                                 obs_data = obs_data,
                                 samp_prop = 0.75,
                                 nsims = 3,
-                                ntree = 500,
+                                ntree = 1000,
                                 ncores = set_up$ncores,
                                 paral = TRUE,
                                 predict = TRUE,
