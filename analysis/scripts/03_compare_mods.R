@@ -38,7 +38,7 @@ sd_shapefile <- st_read(system.file("extdata/sd_shapefile.shp",
 load("data/sd_census_data.rda")
 load("data/sd_vacc_data.rda")
 load("data/sd_case_data.rda")
-load(fp("analysis/out/incursions.csv"))
+incursions <- fread(fp("analysis/out/incursions.csv"))
 
 # for getting observed data
 cand <- fread(fp("analysis/out/candidates.csv"))[1, ]
