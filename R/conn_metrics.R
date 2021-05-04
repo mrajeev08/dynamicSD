@@ -1,3 +1,56 @@
+# # Some way to link KNOWN detected cases
+# missing_progens[, match_id := I_dt_all$progen_id[match(progen_id, I_dt_all$id)]][, prog_detected := match_id %in% I_dt$id]
+# # match missing progens & then for any where still not prog detected repeat!
+
+# Chain stats ----
+chain_stats <- function(names = c("I_dt")) {
+  
+  # Get the objects you need from the environment above this one
+  list2env(use_mget(names, envir_num = 2), envir = environment())
+  
+  I_dt <- I_dt[infected == TRUE]
+  
+  # Get chain sizes & lengths in time period of interest
+  I_gr <- I_dt[progen_id != -1][, c("progen_id", "id")]
+  I_names <- I_dt[, "id"]
+  
+  if(nrow(I_gr) > 0) {
+    setnames(I_gr, c("from", "to"))
+    gr <- graph_from_data_frame(I_gr, 
+                                     vertices = I_names,
+                                     directed = TRUE)
+    comps <- components(gr)
+    V(gr)$membership <- comps$membership
+    chain_dt <- data.table(membership = seq(comps$no),
+                              length = unlist(lapply(decompose(gr), diameter)))
+    
+    case_stats <-
+      data.table(membership = vertex_attr(gr, "membership"),
+                 id = as.numeric(vertex_attr(gr, "name")))
+    
+    case_stats <- case_stats[I_dt[, c("id", "detected", "t_infectious")], on = "id"]
+    case_stats[, c("start_date", "end_date") := .(min(t_infectious), max(t_infectious)), by = "membership"]
+    chain_dt <-
+      case_stats[detected == TRUE][, .(length_wks = end_date[1] - start_date[1], 
+                                       size = .N), 
+                                   by = "membership"][chain_dt, on = "membership"]
+    
+  } else {
+    chain_dt <- NULL
+  }
+    
+  
+  return(chain_dt)
+  
+}
+
+tchains <- function(x) { 
+  if(components(x)$csize > 1) {
+    
+    
+  }  
+}
+
 # Connectivity metrics ----
 conn_stats <- function(names = c("I_dt", "extra_pars", 
                                  "start_date", "days_in_step", 
@@ -39,10 +92,13 @@ conn_stats <- function(names = c("I_dt", "extra_pars",
   
   # Get chain sizes & lengths in time period of interest
   I_gr <- I_dt[progen_id != -1 & t_infectious > tmin][, c("progen_id", "id")]
+  I_names <- I_dt[t_infectious > tmin][, "id"]
   
   if(nrow(I_gr) > 0) {
     setnames(I_gr, c("from", "to"))
-    I_graph <- graph_from_data_frame(I_gr, directed = TRUE)
+    I_graph <- graph_from_data_frame(I_gr, 
+                                     vertices = I_names,
+                                     directed = TRUE)
     comps <- components(I_graph)
     peak_chain_size <- max(comps$csize)
     mean_chain_size <- mean(comps$csize)
