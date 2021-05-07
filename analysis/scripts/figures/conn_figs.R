@@ -18,7 +18,7 @@ source("R/figure_funs.R")
 ppars <- plotpars()
 
 # Read in files -----
-baseline <- fread("analysis/out/campaign_sims/fixed_locs.csv")
+baseline <- fread("analysis/out/archive/campaign_sims/fixed_locs.csv")
 limit_sspread <- fread("analysis/out/archive/int_sims/limit_sspreaders.csv")
 limit_incs <- fread("analysis/out/archive/int_sims/limit_incs.csv")
 
@@ -53,13 +53,13 @@ plot_incs_summ <- summarize_ints(limit_incs)
 
 plot_conn_met <- 
   ggplot(filter(baseline, cov != 0, prop != 0, stopped == FALSE), 
-         aes(x = prop, y = nweeks_over_incs, 
+         aes(x = cov, y = nweeks_over_incs, 
              color = max_conn_vill, 
              group = interaction(cov, prop))) +
   ggbeeswarm::geom_quasirandom() +
-  facet_wrap(~cov) +
+  facet_wrap(~prop) +
   labs(y = "Consecutive weeks above \n 95th% of introductions", 
-       x = "Spatial coverage (proportion of \n villages vaccinated)", 
+       x = "Campaign coverage \n (proportion vaccinated in each village)", 
        color = "Peak connectivity of \n susceptible populations") +
   cowplot::theme_half_open(font_size = 12) +
   scale_color_distiller(palette = "BuPu") +
@@ -123,7 +123,7 @@ plot_constraint <-
   ppars$theme_proj()
 
 
-ggsave("analysis/figs/sfig_conn_mets.jpeg", plot_conn_met)
+ggsave("analysis/figs/sfig_conn_mets.jpeg", plot_conn_met, height = 8, width = 8)
 ggsave("analysis/figs/sfig_sspread_mets.jpeg", plot_sspread_summ)
 ggsave("analysis/figs/sfig_incs_mets.jpeg", plot_incs_summ)
 ggsave("analysis/figs/sfig_base_mets.jpeg", plot_baseline_summ)

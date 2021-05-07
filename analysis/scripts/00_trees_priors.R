@@ -92,10 +92,10 @@ sd_case_data %>%
   mutate(year = year(dmy(symptoms_started))) %>% 
   group_by(year) %>% summarize(n = n()) %$% mean(n)/52 -> cases_per_week
 
-max_incs <- cases_per_week/ 0.85 * 0.5
+sd_incs <- cases_per_week/ 0.85 * 0.5 / 1.96 # 0.96
 
 priors <- list(R0 = function(n) exp(rnorm(n, mean = 0.2, sd = 0.3)), # centered around 1.2
-               iota = function(n) exp(rnorm(n, mean = log(incs_per_week), sd = log(max_incs)/1.96)),
-               k = function(n) 1/exp(rnorm(n, mean = -0.25, sd = 0.5))) # centered around 1.2 
+               iota = function(n) exp(rnorm(n, mean = 0, sd = 0.5)), # centered around 1
+               k = function(n) exp(rnorm(n, mean = 0.25, sd = 0.25))) # centered around 1.35
 
 write_create(priors, here("analysis/out/priors.rds"), saveRDS)

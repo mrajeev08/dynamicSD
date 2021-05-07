@@ -7,7 +7,7 @@ estimate_pars <- function(reftable,
                           sampsize = nrow(reftable), 
                           ntree = 500, 
                           predict = TRUE, 
-                          predict_nsimul = 100,
+                          predict_nsimul = 0,
                           return_training = FALSE) {
   
     
@@ -31,7 +31,7 @@ estimate_pars <- function(reftable,
         setnames(reftab_i, par_names[i], "par")
         
         if(predict_nsimul > 0) {
-          inds <- sample(nrow(reftab_i), predict_nsimul)
+          inds <- 1:predict_nsimul
           simuls <- reftab_i[inds, ]
           reftab_i <- reftab_i[-inds, ]
         }
@@ -50,15 +50,12 @@ estimate_pars <- function(reftable,
           out_stats <- predict(par_obj, obs = obs_data, 
                                training = reftab_i, 
                                paral = paral, ncores = ncores,
-                               ntree = ntree, 
-                               rf.weights = TRUE,
-                               post.err.med = TRUE)
+                               ntree = ntree)
           
           out_stats <- as.data.table(out_stats)
           setnames(out_stats, c("expectation", "median", "variance_postmse", 
                                 "variance_cdf", "quantile_0.025", 
-                                "quantile_0.975", "post_nmae_mean", 
-                                "post_mse_med", "post_nmae_med"))
+                                "quantile_0.975", "post_nmae_mean"))
          
         } else {
           out_preds <- out_stats <- NULL

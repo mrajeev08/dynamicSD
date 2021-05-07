@@ -94,25 +94,29 @@ err_plot_supp <-
   ppars$theme_proj() +
   labs(x = "Number of trees", y = "Out-of-bag error rate")
 
-# model ranks -----
-out_all$mod_predicted %>%
-  mutate(scale = case_when(scale == "grid" ~ "1x1 km",
-                           scale == "vill" ~ "Village")) %>%
-  left_join(ppars$mod_labs) ->  mod_predicted
+prior_error_rate <- min(err[type == "full" & scale == "all"]$error.rate)
+saveRDS(prior_error_rate, "analysis/out/prior_error_rate.rds")
+
+# model stats -----
+# Prior error rates & posterior probabilities ----
+out_all$mod_predicted  %>%
+  dplyr::select(-scale) %>%
+  left_join(ppars$mod_labs) %>%
+  mutate(perc = votes.V1/500*100) ->  mod_predicted
 
 model_ranks_supp <-
   ggplot(filter(mod_predicted, type == "full")) + 
   geom_col(aes(x = reorder(interaction(move, limits), votes.V1), 
-               y = votes.V1/500*100, fill = scale), 
+               y = votes.V1, fill = scale), 
            position = "dodge") + 
   facet_wrap(~incs,  labeller = labeller(incs = ppars$fct_incs)) + 
   scale_fill_brewer(palette = "Dark2", 
                     labels = ppars$scale_labs, 
                     name = "Model scale") +
   ppars$theme_proj() +
-  labs(x = "Movement", y = "Votes (% of trees that \n selected given model)")
-write_csv(mod_predicted, "analysis/out/mod_summary.csv")
-ggsave("analysis/figs/sfig_mod_ranks.jpeg", model_ranks_supp)
+  labs(x = "Movement", y = "Posterior probability")
+write_csv(mod_predicted %>% filter(type == "full"), "analysis/out/mod_summary.csv")
+ggsave("analysis/figs/sfig_mod_ranks.jpeg", model_ranks_supp, height = 7, width = 8)
 
 # lda plots ----
 mod_predicted %>%

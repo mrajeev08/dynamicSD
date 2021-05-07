@@ -1,4 +1,4 @@
-# Comparing Serengeti vax by census based probs vs. random allocation
+# Comparing Serengeti vax at village vs. district level
 
 # Set up on cluster ------
 source("R/utils.R")
@@ -78,7 +78,7 @@ system.time({
                      observe_fun = beta_detect_monthly,
                      serial_fun = serial_lognorm,
                      dispersal_fun = steps_weibull, 
-                     secondary_fun = nbinom_constrained_min, # function argument 
+                     secondary_fun = nbinom_constrained, # function argument 
                      incursion_fun = sim_incursions_pois, 
                      movement_fun = sim_movement_continuous,
                      sequential = TRUE,
@@ -95,64 +95,92 @@ system.time({
 })
 cov_mat_rand <- rand$V_mat/rand$N_mat
 
-sd_census_data %>%
-  mutate(cell_id = cellFromXY(out$rast, xy = cbind(utm_easting, utm_northing)),
-         dogs_total = adult_dogs + pups, dogs_vax = adult_dogs_vacc + pups_vacc) %>%
-  group_by(cell_id) %>%
-  summarize(cov_cell = sum(dogs_vax)/sum(dogs_total)) -> cell_cov
-row_probs <- cell_cov$cov_cell[match(start_up$cell_ids, cell_cov$cell_id)]
-row_probs[is.na(row_probs) | row_probs == 0] <- 1e-3
+# Get district coverage for counterfactual simulation ----
+vacc_data <- vacc_dt[, .(vacc_est = sum(vacc_est)), by = "vacc_times"]
+
+vacc_data %>%
+  arrange(vacc_times) %>%
+  mutate(window = vacc_times - dplyr::lag(vacc_times, 1),
+         group = if_else(window <= 8 & !is.na(window), 0, 1),
+         group = cumsum(group)) %>%
+  group_by(group) %>%
+  mutate(vacc_times = min(vacc_times)) %>%
+  group_by(vacc_times) %>%
+  summarize(vacc_est = sum(vacc_est)) -> vacc_data
+
+pop <- colSums(rand$N_mat)
+vacc_data$pop <- pop[vacc_data$vacc_times]
+vacc_data$cov <- vacc_data$vacc_est/vacc_data$pop  
+
+vacc_data %>%
+  select(vacc_times_dist = vacc_times, cov) %>%
+  expand_grid(vacc_locs = 1:75) %>%
+  as.data.table(.) -> vacc_data
+vacc_data <- vacc_data[vacc_dt, on = "vacc_locs", allow.cartesian = TRUE]
+vacc_data %>%
+  mutate(vacc_times_diff = abs(vacc_times_dist - vacc_times)) %>%
+  group_by(vacc_locs, vacc_times) %>%
+  filter(vacc_times_diff == min(vacc_times_diff)) %>%
+  select(vacc_locs, vacc_times, vacc_est = cov) %>% 
+  mutate(vacc_est = case_when(vacc_times > 200 & vacc_times < 250 ~ vacc_est + 0.2,
+                              vacc_times > 400 & vacc_times < 500 ~ vacc_est + 0.17, 
+                              vacc_times > 800 & vacc_times < 900 ~ vacc_est + 0.07,
+                              TRUE ~ vacc_est)) %>%
+  as.data.table(.) -> dist_vacc
+
+fwrite(dist_vacc, "analysis/out/dist_vacc_smoothed.csv")
 
 system.time({
-  prob <- simrabid(start_up, 
-                     start_vacc = cand$start_vacc, 
-                     I_seeds = cand$I_seeds, 
-                     vacc_dt = vacc_dt,
-                     params = c(pars, 
-                                param_defaults),
-                     days_in_step = cand$days_in_step,
-                     observe_fun = beta_detect_monthly,
-                     serial_fun = serial_lognorm,
-                     dispersal_fun = steps_weibull, 
-                     secondary_fun = nbinom_constrained_min, # function argument 
-                     incursion_fun = sim_incursions_pois, 
-                     movement_fun = sim_movement_continuous,
-                     sequential = TRUE,
-                     allow_invalid = TRUE,
-                     leave_bounds = TRUE, 
-                     max_tries = 100,
-                     summary_fun = use_mget, # function argument
-                     track = cand$track,
-                     weights = NULL, 
-                     row_probs = row_probs,
-                     coverage = FALSE, 
-                     break_threshold = cand$break_threshold,
-                     by_admin = FALSE)
+  dist <- simrabid(start_up, 
+                   start_vacc = cand$start_vacc, 
+                   I_seeds = cand$I_seeds, 
+                   vacc_dt = dist_vacc,
+                   params = c(pars, 
+                              param_defaults),
+                   days_in_step = cand$days_in_step,
+                   observe_fun = beta_detect_monthly,
+                   serial_fun = serial_lognorm,
+                   dispersal_fun = steps_weibull, 
+                   secondary_fun = nbinom_constrained, # function argument 
+                   incursion_fun = sim_incursions_pois, 
+                   movement_fun = sim_movement_continuous,
+                   sequential = TRUE,
+                   allow_invalid = TRUE,
+                   leave_bounds = TRUE, 
+                   max_tries = 100,
+                   summary_fun = use_mget, # function argument
+                   track = cand$track,
+                   weights = NULL, 
+                   row_probs = NULL,
+                   coverage = TRUE, 
+                   break_threshold = cand$break_threshold,
+                   by_admin = FALSE)
 })
 
-cov_mat_cens <- prob$V_mat/prob$N_mat
+cov_mat_dist <- dist$V_mat/dist$N_mat
 
-hist(cov_mat_cens - cov_mat_rand)
-cov_mat_cens <- data.table(cell_id = start_up$cell_ids, cov_mat_cens)
+plot(colSums(dist$V_mat)/colSums(dist$N_mat), type = "l", ylim = c(0, 1))
+lines(colSums(rand$V_mat)/colSums(rand$N_mat), col = "blue")
+
+hist(cov_mat_dist - cov_mat_rand)
+cov_mat_dist <- data.table(cell_id = start_up$cell_ids, cov_mat_dist)
 rast_dt <- data.table(as.data.frame(out$rast, xy = TRUE))
 rast_dt$cell_id <- 1:nrow(rast_dt)
-cov_dt_cens <- rast_dt[cov_mat_cens, on = "cell_id"][, type := "cens"]
+cov_dt_dist <- rast_dt[cov_mat_dist, on = "cell_id"][, type := "dist"]
 
 cov_mat_rand <- data.table(cell_id = start_up$cell_ids, cov_mat_rand)
 cov_dt_rand <- rast_dt[cov_mat_rand, on = "cell_id"][, type := "rand"]
 
-cov_comp <- rbind(cov_dt_cens, cov_dt_rand)
+cov_comp <- rbind(cov_dt_dist, cov_dt_rand)
 
 ggplot(cov_comp) + 
-  geom_tile(aes(x = x, y = y, fill = V600)) + 
+  geom_tile(aes(x = x, y = y, fill = V200)) + 
   facet_wrap(~type)
 
 comps_cell <- melt(cov_comp, id.vars = c("type", "x", "y", "layer", "cell_id"))
 comps_corr <- dcast(comps_cell, x + y + layer + cell_id + variable ~ type, value.var = "value")
 
-ggplot(comps_corr[!is.na(cens) & cens !=0 & !is.na(rand) & rand != 0]) + 
-  geom_hex(aes(cens, rand))
-hist(comps_corr$cens - comps_corr$rand)
+ggplot(comps_corr[!is.na(dist) & dist !=0 & !is.na(rand) & rand != 0]) + 
+  geom_hex(aes(dist, rand))
+hist(comps_corr$dist - comps_corr$rand)
 
-plot(colSums(rand$V_mat)/colSums(rand$N_mat), type = "l")
-lines(colSums(prob$V_mat)/colSums(prob$N_mat), col = "blue")

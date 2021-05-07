@@ -1,6 +1,6 @@
 # Estimate parameters -----
 
-# sub_cmd:=-t 2 -n 5 -jn est -wt 5m -md \'gdal\' -ar \'1-24\' -sn
+# sub_cmd:=-t 2 -n 5 -jn test -wt 5m -md \'gdal\' -ar \'1-24\' -sn
 
 arg <- commandArgs(trailingOnly = TRUE)
 
@@ -66,7 +66,7 @@ param_ests <- estimate_pars(reftable = reftl,
                             ncores = set_up$ncores, 
                             paral = TRUE, 
                             obs_data = obs_data, 
-                            ntree = 1000, 
+                            ntree = 500, 
                             predict = TRUE, 
                             predict_nsimul = 1000,
                             return_training = FALSE)
@@ -82,7 +82,7 @@ param_ests_se <- estimate_par_se(reftable = reftl,
                                   ncores = set_up$ncores, 
                                   paral = TRUE, 
                                   obs_data = obs_data, 
-                                  ntree = 1000, 
+                                  ntree = 500, 
                                   predict = TRUE, 
                                   samp_prop = 0.75, 
                                   nsims = 3)

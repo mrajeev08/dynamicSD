@@ -9,7 +9,7 @@ library(magrittr)
 summ_stat_labs <- 
   tribble(~summstat, ~lab, ~descr, ~type, 
           "max_I", "Max I", "Maximum monthly number of cases", "Temporal",
-          "median_I", "Median I", "Maximum monthly number of cases", "Temporal",
+          "median_I", "Median I", "Median monthly number of cases", "Temporal",
           "mean_I", "Mean I", "Mean monthly number of cases", "Temporal",
           "kb_temp", "Temporal KB", "Kullback-Leibler Divergence between observed and simulated distribution of cases temporally", "Temporal", 
           "kb_spat", "Spatial KB", "Kullback-Leibler Divergence between observed and simulated distribution of cases spatially", "Spatial", 

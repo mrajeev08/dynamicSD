@@ -1,4 +1,24 @@
 # Time series from simulations ----
+vax_stats <- function(names = c("S_mat", "N_mat",
+                                "loc_ids")) {
+  
+  
+  # Get the objects you need from the environment above this one
+  list2env(use_mget(names, envir_num = 2), envir = environment())
+  
+  s_vill <- data.table(S_mat, loc_ids)
+  s_vill <- s_vill[, lapply(.SD, sum), by = "loc_ids"]
+  n_vill <- data.table(N_mat, loc_ids)
+  n_vill <- n_vill[, lapply(.SD, sum), by = "loc_ids"]
+  cov_mat <- s_vill[, -"loc_ids"]/n_vill[, -"loc_ids"]
+  cov_vill <- data.table(cov_mat, loc_ids)
+  
+  # out data.table
+  return(cov_vill)
+  
+}
+
+# Time series from simulations ----
 ts_stats <- function(names = c("I_dt", "extra_pars", 
                                "start_date", "days_in_step", 
                                "S_mat", "N_mat",

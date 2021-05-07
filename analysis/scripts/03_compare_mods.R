@@ -50,47 +50,61 @@ obs_data <- get_observed_data(sd_case_data,
 
 # Model comparison -----------
 reftab_list <-  get_reftab_list(dir = fp("analysis/out/abc_sims"))
+# Filter to just one set
+reftab_list %<>% group_by(root_name) %>% slice(1) %>% as.data.table(.)
 reftl <- read_reftabs(reftab_list, dir = fp("analysis/out/abc_sims"))
 
-# do a foreach (do loop here) 
-scale <- c("grid", "vill")
+mod_comp <- compare_mods(reftable = reftl, 
+                         par_names = c("R0", "k", "iota"), 
+                         exclude = c("stopped", "sim", "break_threshold",
+                                     "prop_start_pop"),
+                         obs_data = obs_data, 
+                         ntree = 500, 
+                         ncores = set_up$ncores, 
+                         paral = TRUE,
+                         predict = TRUE, 
+                         return_training = FALSE)
 
-foreach(i = seq_len(length(scale))) %do% {
-  
-  reftl_now <- reftl[grep(scale[i], modname)]
-  mod_comp <- compare_mods(reftable = reftl_now, 
-                           par_names = c("R0", "k", "iota"), 
+write_create(mod_comp, 
+             fp(paste0("analysis/out/mod_comp/full_all", ".rds")),
+             saveRDS)
+
+mod_comp <- compare_mod_se(reftable = reftl,
+                           par_names = c("R0", "k", "iota"),
                            exclude = c("stopped", "sim", "break_threshold",
                                        "prop_start_pop"),
-                           obs_data = obs_data, 
-                           ntree = 1000, 
-                           ncores = set_up$ncores, 
+                           obs_data = obs_data,
+                           samp_prop = 0.75,
+                           nsims = 3,
+                           ntree = 500,
+                           ncores = set_up$ncores,
                            paral = TRUE,
-                           predict = TRUE, 
+                           predict = TRUE,
                            return_training = FALSE)
-  
-  write_create(mod_comp, 
-               fp(paste0("analysis/out/mod_comp/full_", scale[i], ".rds")),
-               saveRDS)
-  
-  mod_comp <- compare_mod_se(reftable = reftl_now,
-                                par_names = c("R0", "k", "iota"),
-                                exclude = c("stopped", "sim", "break_threshold",
-                                            "prop_start_pop"),
-                                obs_data = obs_data,
-                                samp_prop = 0.75,
-                                nsims = 3,
-                                ntree = 1000,
-                                ncores = set_up$ncores,
-                                paral = TRUE,
-                                predict = TRUE,
-                                return_training = FALSE)
-  write_create(mod_comp,
-               fp(paste0("analysis/out/mod_comp/se_", scale[i], ".rds")),
-               saveRDS)
+write_create(mod_comp,
+             fp(paste0("analysis/out/mod_comp/se_all", ".rds")),
+             saveRDS)
 
-  print("Done")
-}
+# Also do comparison without zero covars -----
+mod_comp <- compare_mods(reftable = reftl, 
+                         par_names = c("R0", "k", "iota"), 
+                         exclude = c("stopped", "sim", "break_threshold",
+                                     "prop_start_pop", 
+                                     "kb_temp", "kb_spat", 
+                                     "spat_rmse", "spat_loss", 
+                                     "temp_rmse", "temp_loss"),
+                         obs_data = obs_data, 
+                         ntree = 500, 
+                         ncores = set_up$ncores, 
+                         paral = TRUE,
+                         predict = TRUE, 
+                         return_training = FALSE)
+
+write_create(mod_comp, 
+             fp(paste0("analysis/out/mod_comp/ldas_", ".rds")),
+             saveRDS)
+
+print("Done")
 
 # Parse these from subutil for where to put things
 syncto <- "~/Documents/Projects/dynamicSD/analysis/out/"

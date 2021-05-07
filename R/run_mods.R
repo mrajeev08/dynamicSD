@@ -14,7 +14,8 @@ run_simrabid <- function(cand,
                          multi = FALSE, 
                          convolve_steps = TRUE, 
                          sim_vacc = "none", 
-                         routine_vacc = 0) {
+                         routine_vacc = 0, 
+                         cover = FALSE) {
   
   
   start_up <- setup_sim(start_date = cand$start_date, 
@@ -138,11 +139,10 @@ run_simrabid <- function(cand,
                                                  sim_years = vacc_dt$years, 
                                                  burn_in_years = vacc_dt$burn_in)
                       cover <- TRUE
-                      
+
                     }
                     
                     if(sim_vacc == "none") {
-                      cover <- FALSE
                       vacc_dt_i <- copy(vacc_dt)
                     }
                     
@@ -167,7 +167,7 @@ run_simrabid <- function(cand,
                                          track = cand$track,
                                          weights = weights, 
                                          row_probs = NULL,
-                                         coverage = cover, # this should be an argument!
+                                         coverage = cover, 
                                          break_threshold = cand$break_threshold,
                                          by_admin = cand$by_admin,
                                          extra_pars = extra_pars, 

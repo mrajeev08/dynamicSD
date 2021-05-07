@@ -1,6 +1,6 @@
 # Simulate from posteriors ---------
 
-# sub_cmd:=-t 2 -n 21 -jn psim -wt 1m -md \'gdal\' -ar \'1-24\' -cmd \'1e3\'
+# sub_cmd:=-t 6 -n 21 -jn psim -wt 1m -md \'gdal\' -ar \'1-24\' -cmd \'1000\'
 
 arg <- commandArgs(trailingOnly = TRUE)
 
@@ -9,8 +9,8 @@ source("R/utils.R")
 set_up <- setup_cl(mpi = TRUE)
 
 # set up args and cluster if applicable ----
-mod_ind <- ifelse(!set_up$slurm, 1, as.numeric(arg[1]))
-nsims <- ifelse(!set_up$slurm, 5, as.numeric(arg[2]))
+mod_ind <- ifelse(!set_up$slurm, 2, as.numeric(arg[1]))
+nsims <- ifelse(!set_up$slurm, 2, as.numeric(arg[2]))
 
 cl <- make_cl(set_up$ncores)
 register_cl(cl)
@@ -61,15 +61,11 @@ cand <- cands_all[name == cand_now][1, ]
 out <- get_sd_pops(sd_shapefile, res_m = 1000,
                    sd_census_data, death_rate_annual = cand$death_rate)
 
-# loop for independent & joint posteriors ----
+# loop for independent posteriors ----
 post_list <- list.files(fp("analysis/out/par_ests/"))
-
 post_full <- post_list[grep(cand_now, post_list)]
 post_full <- post_full[grep("full", post_full)]
 post_full <- readRDS(fp(paste0("analysis/out/par_ests/", post_full)))$preds
-inds_joint <- post_full[, .(check = all(V1 > 0)), by = "sim_id"][check == TRUE]
-post_joint <-  post_full[sim_id %in% inds_joint$sim_id]
-post_loop <- list(full = post_full, joint = post_joint)
 
 # loop for vaccination scenarios ----
 vacc_dt <- get_sd_vacc(sd_vacc_data, sd_shapefile, origin_date = cand$start_date,
@@ -77,8 +73,24 @@ vacc_dt <- get_sd_vacc(sd_vacc_data, sd_shapefile, origin_date = cand$start_date
                        rollup = 4)
 endemic <- vacc_dt[0]
 
+# campaign where all villages are covered
+vill_vacc_all <- 
+  sim_campaigns(locs = 1:75, 
+                campaign_prob = 1, 
+                coverage = 0.3, 
+                burn_in_years = 2, 
+                sim_years = 20, 
+                sample_tstep = function(n) {sample.int(16, n, replace = TRUE)})
+
+# read in campaign data where temporal and spatial patterns track with SD, but smoothed out
+vill_vacc_smoothed <- fread(fp("analysis/out/dist_vacc_smoothed.csv"))
+
 # loop list
-vacc_loop <- list(vill_vacc = vacc_dt, endemic = endemic)
+vacc_loop <- list(vill_vacc = vacc_dt, 
+                  endemic = endemic, 
+                  vill_vacc_smoothed = vill_vacc_smoothed, 
+                  vill_vacc_all = vill_vacc_all)
+covers <- c(FALSE, FALSE, TRUE, TRUE)
 
 # get observed data ----
 sd_case_data %>%
@@ -88,20 +100,14 @@ sd_case_data %>%
                                     origin_date = cand$start_date)) -> cases_by_month
 obs_data <- list(cases_by_month = cases_by_month)
 
-inds_dt <- expand.grid(v = 1:length(vacc_loop), 
-                       p = 1:length(post_loop))
-
 # run simulations ----
 out_post_sims <- 
-    foreach(i = 1:nrow(inds_dt), 
+    foreach(i = seq(length(vacc_loop)), 
             .combine = comb, .multicombine = TRUE) %do% {
       
-      inds <- inds_dt[i, ]
-      
       # posteriors
-      posts <- post_loop[[inds$p]]
       set.seed(cand$seed) # same posteriors by candidate
-      posts <- posts[, sample(resp, nsims, prob = V1, replace = TRUE), by = "param"]
+      posts <- post_full[, sample(resp, nsims, prob = V1, replace = TRUE), by = "param"]
       posts <- split(posts$V1, posts$param)
       
       outs <- run_simrabid(cand = cand, 
@@ -110,30 +116,64 @@ out_post_sims <-
                            param_defaults = param_defaults,
                            nsims = nsims, 
                            extra_pars = list(obs_data = obs_data),
-                           vacc_dt = vacc_loop[[inds$v]],
+                           vacc_dt = vacc_loop[[i]],
                            combine_fun = 'rbind', 
                            summary_fun = ts_stats, 
                            merge_fun = data.table, 
-                           secondary_fun = nbinom_constrained_min,
+                           secondary_fun = nbinom_constrained,
                            weight_covars = list(0), 
                            weight_params = list(0), 
                            multi = FALSE, 
                            convolve_steps = TRUE, 
-                           sim_vacc = "none") 
+                           sim_vacc = "none", 
+                           cover = covers[i]) 
       
       out_scores <- get_tempstats(outs, obs_data, quants = c(0.5, 0.9), 
                                   nsamp = 100, ncurves = 100, nbest = 5)
       curve_scores <- out_scores$curve_scores
       out_scores <- out_scores$ts_scores
       outs$modname <- out_scores$modname <- curve_scores$modname <- cand_now
-      outs$vacc_type <- out_scores$vacc_type <- curve_scores$vacc_type <- names(vacc_loop)[inds$v]
-      outs$post_type <- out_scores$post_type <- curve_scores$post_type <- names(post_loop)[inds$p]
+      outs$vacc_type <- out_scores$vacc_type <- curve_scores$vacc_type <- names(vacc_loop)[i]
+      outs$post_type <- out_scores$post_type <- curve_scores$post_type <- "full"
       
       list(sims = outs, scores = out_scores, curve_scores = curve_scores)
     }
- 
-# Write out results & close ----
 
+# For vaccination figs ----
+out_post_vax <- 
+  foreach(i = seq(length(vacc_loop)), 
+          .combine = "rbind") %do% {
+            
+            # posteriors joint
+            set.seed(cand$seed) # same posteriors by candidate
+            posts <- post_full[, sample(resp, 5, prob = V1, replace = TRUE), by = "param"]
+            posts <- split(posts$V1, posts$param)
+            
+            outs <- run_simrabid(cand = cand, 
+                                 mod_specs = out,
+                                 param_ests = posts,
+                                 param_defaults = param_defaults,
+                                 nsims = 5, 
+                                 extra_pars = list(obs_data = obs_data),
+                                 vacc_dt = vacc_loop[[i]],
+                                 combine_fun = 'rbind', 
+                                 summary_fun = vax_stats, 
+                                 merge_fun = data.table, 
+                                 secondary_fun = nbinom_constrained,
+                                 weight_covars = list(0), 
+                                 weight_params = list(0), 
+                                 multi = FALSE, 
+                                 convolve_steps = TRUE, 
+                                 sim_vacc = "none", 
+                                 cover = covers[i]) 
+            
+            outs$modname <- cand_now
+            outs$vacc_type <- names(vacc_loop)[i]
+            outs$post_type <- "full"
+            outs
+  }
+
+# Write out results & close ----
 file_pref <- paste0("analysis/out/post_sims/")
 
 write_create(out_post_sims$sims,
@@ -146,6 +186,10 @@ write_create(out_post_sims$scores,
 
 write_create(out_post_sims$curve_scores,
              fp(paste0(file_pref, cand_now, "_curve_scores.csv")),
+             data.table::fwrite)
+
+write_create(out_post_vax,
+             fp(paste0(file_pref, cand_now, "_vax.csv")),
              data.table::fwrite)
 
 # Parse these from subutil for where to put things

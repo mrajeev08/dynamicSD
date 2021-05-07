@@ -21,8 +21,6 @@ chain_stats <- function(names = c("I_dt")) {
                                      directed = TRUE)
     comps <- components(gr)
     V(gr)$membership <- comps$membership
-    chain_dt <- data.table(membership = seq(comps$no),
-                              length = unlist(lapply(decompose(gr), diameter)))
     
     case_stats <-
       data.table(membership = vertex_attr(gr, "membership"),
@@ -33,7 +31,7 @@ chain_stats <- function(names = c("I_dt")) {
     chain_dt <-
       case_stats[detected == TRUE][, .(length_wks = end_date[1] - start_date[1], 
                                        size = .N), 
-                                   by = "membership"][chain_dt, on = "membership"]
+                                   by = "membership"]
     
   } else {
     chain_dt <- NULL

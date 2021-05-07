@@ -29,8 +29,8 @@ library(lubridate)
 
 # set up args
 mod_ind <- as.numeric(arg[1])
-cand <- fread(fp("analysis/out/candidates.csv"))[mod_ind, ]
-nsims <- as.numeric(arg[2])
+cand <- if(set_up$slurm) fread(fp("analysis/out/candidates.csv"))[mod_ind, ] else  fread(fp("analysis/out/candidates.csv"))[1, ]
+nsims <- ifelse(set_up$slurm, as.numeric(arg[2]), 5)
 
 # load in shapefile & other data
 sd_shapefile <- st_read(system.file("extdata/sd_shapefile.shp", 
@@ -77,7 +77,7 @@ out_sims <- run_simrabid(cand = cand,
                          combine_fun = 'rbind', 
                          summary_fun = inc_stats, 
                          merge_fun = data.table,
-                         secondary_fun = nbinom_constrained_min,
+                         secondary_fun = nbinom_constrained,
                          weight_covars = list(0), 
                          weight_params = list(0))  
 
